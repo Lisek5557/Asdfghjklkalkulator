@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kalkulator Taryf Taxi - Bydgoszcz</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+<style>
+body { background-color: #1a202c; color: #e2e8f0; }
+#map { height: 400px; width: 100%; }
+.leaflet-container { background: #2d3748; }
+/* Styl dla szybkich celów */
+.poi-btn { @apply bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-xs transition-colors; }
+</style>
+</head>
+<body class="min-h-screen flex flex-col items-center p-4">
+<div class="w-full max-w-2xl bg-gray-800 p-6 rounded-lg shadow-lg">
+<h1 class="text-2xl font-bold mb-4 text-center">Kalkulator Taryf Taxi - Bydgoszcz</h1>
+
+<div class="space-y-4">
+    <!-- Cennik -->
+    <div>
+        <label for="corporation" class="block text-sm font-medium">Wybierz cennik</label>
+        <select id="corporation" class="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white">
+            <option value="Z">Z</option>
+            <option value="z2">z2</option>
+            <option value="E">E</option>
+            <option value="i">i</option>
+            <option value="K">K</option>
+            <option value="M">M</option>
+            <option value="custom">Własny</option>
+        </select>
+    </div>
+
+    <!-- Własny Cennik (Ukryty) -->
+    <div id="customPricing" class="hidden space-y-4">
+        <div>
+            <label for="customStartFee" class="block text-sm font-medium">Opłata startowa</label>
+            <input id="customStartFee" type="number" step="0.01" class="w-full p-2 bg-gray-700 border border-gray-600 rounded">
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+            <input id="customTariff1" type="number" step="0.01" placeholder="T1" class="p-2 bg-gray-700 border border-gray-600 rounded text-white">
+            <input id="customTariff2" type="number" step="0.01" placeholder="T2" class="p-2 bg-gray-700 border border-gray-600 rounded text-white">
+            <input id="customTariff3" type="number" step="0.01" placeholder="T3" class="p-2 bg-gray-700 border border-gray-600 rounded text-white">
+            <input id="customTariff4" type="number" step="0.01" placeholder="T4" class="p-2 bg-gray-700 border border-gray-600 rounded text-white">
+        </div>
+    </div>
+
+    <!-- Trasa -->
+    <div class="flex space-x-2">
+        <div class="flex-1">
+            <label for="start" class="block text-sm font-medium">Punkt startowy</label>
+            <input id="start" type="text" placeholder="Pobieranie lokalizacji..." class="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white">
+        </div>
+        <button id="resetStart" class="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded mt-6">GPS</button>
+    </div>
+    <div>
+        <label for="end" class="block text-sm font-medium">Punkt docelowy</label>
+        <input id="end" type="text" placeholder="np. Gdańska 34" class="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white">
+    </div>
+
+    <!-- Szybkie Cele (Pkt 5) -->
+    <div class="p-3 bg-gray-900/50 rounded border border-gray-700">
+        <p class="text-[10px] uppercase text-gray-500 font-bold mb-2 tracking-wider">Szybkie cele</p>
+        <div class="flex flex-wrap gap-2">
+            <button onclick="setEnd('Dworzec Główny, Bydgoszcz')" class="poi-btn">PKP Główny</button>
+            <button onclick="setEnd('Port Lotniczy, Bydgoszcz')" class="poi-btn">Lotnisko</button>
+            <button onclick="setEnd('Stary Rynek, Bydgoszcz')" class="poi-btn">Stary Rynek</button>
+            <button onclick="setEnd('Focus Mall, Bydgoszcz')" class="poi-btn">Focus</button>
+            <button onclick="setEnd('Szpital Jurasza, Bydgoszcz')" class="poi-btn">Jurasza</button>
+        </div>
+    </div>
+
+    <div>
+        <label for="stops" class="block text-sm font-medium">Przystanki (opcjonalne)</label>
+        <input id="stops" type="text" placeholder="Adresy po przecinku" class="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white">
+    </div>
+
+    <div class="grid grid-cols-2 gap-4">
+        <div>
+            <label for="waitTime" class="block text-sm font-medium">Postój (min)</label>
+            <input id="waitTime" type="number" min="0" placeholder="0" class="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white">
+        </div>
+        <div class="pt-6">
+            <label class="flex items-center">
+                <input type="checkbox" id="tariffSwitch" class="mr-2" />
+                <span id="tariffLabel" class="text-xs">Taryfa 2/4</span>
+            </label>
+        </div>
+    </div>
+
+    <!-- Rabaty -->
+    <div class="flex space-x-2">
+        <button id="discount10" class="flex-1 bg-blue-600 text-xs py-2 rounded">-10%</button>
+        <button id="discount20" class="flex-1 bg-blue-600 text-xs py-2 rounded">-20%</button>
+        <button id="discount0" class="flex-1 bg-red-600 text-xs py-2 rounded">Brak</button>
+    </div>
+
+    <!-- Panel JDG (Pkt 4) -->
+    <div class="p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg">
+        <h3 class="text-xs font-bold mb-2 text-blue-300 uppercase tracking-widest">Kalkulator JDG</h3>
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-[10px] text-blue-300/60 uppercase">Cena paliwa</label>
+                <input id="fuelPrice" type="number" step="0.01" class="w-full p-2 bg-gray-900 border border-gray-700 rounded text-sm">
+            </div>
+            <div>
+                <label class="block text-[10px] text-blue-300/60 uppercase">Spalanie l/100</label>
+                <input id="fuelConsumption" type="number" step="0.1" class="w-full p-2 bg-gray-900 border border-gray-700 rounded text-sm">
+            </div>
+        </div>
+        <div id="driverProfit" class="mt-2 text-sm text-green-400 font-mono"></div>
+    </div>
+
+    <button id="calculate" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold p-3 rounded transition-all">OBLICZ KOSZT</button>
+    
+    <!-- Wyniki i Udostępnianie (Pkt 6) -->
+    <div id="result" class="mt-4 p-4 bg-gray-700 rounded"></div>
+    <button id="shareEstimate" class="hidden w-full bg-blue-500 hover:bg-blue-600 text-white font-bold p-3 rounded mt-2">
+        KOPIUJ DLA KLIENTA 📋
+    </button>
+    
+    <div id="map" class="mt-4 rounded-lg overflow-hidden"></div>
+</div>
+</div>
+
+<script>
+// --- KONFIGURACJA I MAPA ---
+const map = L.map('map').setView([53.1235, 18.0084], 12);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    attribution: 'CARTO'
+}).addTo(map);
+
+const bydgoszczBoundary = {"type": "Polygon","coordinates": [[[17.9507, 53.1187],[17.9492, 53.1191],[17.9440, 53.1189],[17.9437, 53.1188],[17.9432, 53.1203],[17.9424, 53.1222],[17.9425, 53.1234],[17.9427, 53.1241],[17.9430, 53.1252],[17.9425, 53.1259],[17.9402, 53.1272],[17.9394, 53.1270],[17.9365, 53.1271],[17.9360, 53.1260],[17.9342, 53.1253],[17.9311, 53.1247],[17.9314, 53.1255],[17.9284, 53.1265],[17.9266, 53.1267],[17.9241, 53.1269],[17.9219, 53.1274],[17.9223, 53.1285],[17.9196, 53.1293],[17.9157, 53.1299],[17.9158, 53.1314],[17.9148, 53.1314],[17.9150, 53.1325],[17.9136, 53.1321],[17.9123, 53.1312],[17.9119, 53.1314],[17.9121, 53.1317],[17.9115, 53.1319],[17.9116, 53.1321],[17.9111, 53.1324],[17.9105, 53.1312],[17.9090, 53.1308],[17.9085, 53.1304],[17.9048, 53.1290],[17.9022, 53.1271],[17.9048, 53.1210],[17.9006, 53.1111],[17.8938, 53.1121],[17.8954, 53.1223],[17.8981, 53.1302],[17.8938, 53.1290],[17.8923, 53.1301],[17.8894, 53.1312],[17.8881, 53.1338],[17.8873, 53.1344],[17.8871, 53.1364],[17.8870, 53.1386],[17.8879, 53.1386],[17.8877, 53.1428],[17.8786, 53.1422],[17.8740, 53.1420],[17.8772, 53.1511],[17.8812, 53.1510],[17.8803, 53.1518],[17.8810, 53.1519],[17.8803, 53.1527],[17.8871, 53.1520],[17.8919, 53.1514],[17.8936, 53.1513],[17.8937, 53.1515],[17.8925, 53.1518],[17.8929, 53.1524],[17.8977, 53.1522],[17.8986, 53.1536],[17.8991, 53.1537],[17.8995, 53.1540],[17.9063, 53.1591],[17.9075, 53.1599],[17.9063, 53.1591],[17.9044, 53.1599],[17.9042, 53.1602],[17.9048, 53.1605],[17.9051, 53.1605],[17.9052, 53.1607],[17.9062, 53.1619],[17.9076, 53.1639],[17.9107, 53.1641],[17.9133, 53.1642],[17.9191, 53.1637],[17.9213, 53.1646],[17.9242, 53.1639],[17.9471, 53.1716],[17.9490, 53.1789],[17.9427, 53.1896],[17.9420, 53.1912],[17.9369, 53.1958],[17.9344, 53.2019],[17.9343, 53.2022],[17.9356, 53.2031],[17.9385, 53.2045],[17.9394, 53.2046],[17.9416, 53.2042],[17.9418, 53.2034],[17.9415, 53.2026],[17.9434, 53.2017],[17.9455, 53.2019],[17.9474, 53.2031],[17.9489, 53.2051],[17.9551, 53.2057],[17.9597, 53.2086],[17.9667, 53.2081],[17.9711, 53.2077],[17.9730, 53.2094],[17.9747, 53.2092],[17.9788, 53.2085],[17.9833, 53.2055],[17.9845, 53.2036],[17.9844, 53.2017],[17.9841, 53.2004],[17.9833, 53.1999],[17.9824, 53.1990],[17.9786, 53.1955],[17.9760, 53.1934],[17.9745, 53.1876],[17.9730, 53.1819],[17.9749, 53.1677],[18.0062, 53.1788],[18.0144, 53.1777],[18.0135, 53.1763],[18.0208, 53.1764],[18.0254, 53.1762],[18.0301, 53.1760],[18.0337, 53.1758],[18.0372, 53.1757],[18.0397, 53.1763],[18.0421, 53.1767],[18.0429, 53.1766],[18.0430, 53.1769],[18.0481, 53.1745],[18.0522, 53.1726],[18.0549, 53.1747],[18.0555, 53.1744],[18.0596, 53.1736],[18.0617, 53.1732],[18.0636, 53.1731],[18.0636, 53.1728],[18.0672, 53.1723],[18.0667, 53.1718],[18.0670, 53.1716],[18.0686, 53.1712],[18.0689, 53.1690],[18.0711, 53.1688],[18.0723, 53.1692],[18.0739, 53.1679],[18.0725, 53.1620],[18.0789, 53.1625],[18.0840, 53.1636],[18.0897, 53.1641],[18.0901, 53.1651],[18.0913, 53.1651],[18.0922, 53.1656],[18.0924, 53.1696],[18.1113, 53.1679],[18.1183, 53.1671],[18.1297, 53.1773],[18.1360, 53.1782],[18.1492, 53.1776],[18.1636, 53.1773],[18.1630, 53.1763],[18.1646, 53.1762],[18.1657, 53.1785],[18.1660, 53.1788],[18.1629, 53.1795],[18.1639, 53.1815],[18.1637, 53.1817],[18.1633, 53.1817],[18.1633, 53.1819],[18.1626, 53.1819],[18.1626, 53.1827],[18.1628, 53.1829],[18.1633, 53.1848],[18.1676, 53.1843],[18.1686, 53.1847],[18.1698, 53.1846],[18.1700, 53.1850],[18.1783, 53.1836],[18.1795, 53.2009],[18.1929, 53.1994],[18.2002, 53.1733],[18.1933, 53.1552],[18.1716, 53.1450],[18.1702, 53.1456],[18.1696, 53.1454],[18.1702, 53.1446],[18.1646, 53.1425],[18.1675, 53.1390],[18.1480, 53.1358],[18.1400, 53.1277],[18.1349, 53.1184],[18.1394, 53.1075],[18.1448, 53.1035],[18.1463, 53.0980],[18.1505, 53.0958],[18.1430, 53.0884],[18.1422, 53.0875],[18.1403, 53.0857],[18.1382, 53.0763],[18.1377, 53.0755],[18.1374, 53.0749],[18.1361, 53.0687],[18.1370, 53.0658],[18.1351, 53.0671],[18.1189, 53.0660],[18.1111, 53.0658],[18.0932, 53.0649],[18.0836, 53.0616],[18.0522, 53.0605],[18.0115, 53.0606],[18.0110, 53.0943],[18.0076, 53.0947],[18.0074, 53.0962],[17.9928, 53.0967],[17.9791, 53.0978],[17.9669, 53.0977],[17.9627, 53.0968],[17.9607, 53.0951],[17.9501, 53.0985],[17.9488, 53.1000],[17.9488, 53.1008],[17.9482, 53.1045],[17.9496, 53.1098],[17.9497, 53.1102],[17.9497, 53.1106],[17.9507, 53.1186],[17.9507, 53.1187]]]};
+const lotniskoBoundary = {"type": "Polygon","coordinates": [[[17.9942, 53.0960],[17.9943, 53.0920],[18.0051, 53.0914],[18.0050, 53.0958],[17.9942, 53.0960]]]};
+
+const pricingPlans = {
+    Z: { tariffs: { 1: 3.4, 2: 4.8, 3: 5.4, 4: 7.8 }, startFee: 7.9, waitFee: 43 },
+    z2: { tariffs: { 1: 3.6, 2: 5.4, 3: 7.2, 4: 9.4 }, startFee: 8.9, waitFee: 43 },
+    E: { tariffs: { 1: 3.0, 2: 4.0, 3: 5.0, 4: 6.0 }, startFee: 8.0, waitFee: 39 },
+    i: { tariffs: { 1: 3.0, 2: 4.4, 3: 5.4, 4: 7.8 }, startFee: 7.9, waitFee: 39 },
+    K: { tariffs: { 1: 3.6, 2: 5.0, 3: 6.0, 4: 8.4 }, startFee: 7.9, waitFee: 39 },
+    M: { tariffs: { 1: 4.5, 2: 6.25, 3: 9.0, 4: 12.5 }, startFee: 7.9, waitFee: 39 }
+};
+
+let routeLayer = null;
+let discount = 0;
+let lastCalculated = { cost: 0, distance: 0, end: "" };
+
+// --- PKT 4 & 5: LOCALSTORAGE & UI ---
+const fuelInput = document.getElementById('fuelPrice');
+const consInput = document.getElementById('fuelConsumption');
+
+function setEnd(address) {
+    document.getElementById('end').value = address;
+}
+
+// Wczytaj zapamiętane dane paliwa
+fuelInput.value = localStorage.getItem('taxi_fuel') || "6.50";
+consInput.value = localStorage.getItem('taxi_cons') || "7.0";
+
+[fuelInput, consInput].forEach(el => {
+    el.addEventListener('input', () => {
+        localStorage.setItem('taxi_fuel', fuelInput.value);
+        localStorage.setItem('taxi_cons', consInput.value);
+    });
+});
+
+// --- FUNKCJE LOGICZNE ---
+document.getElementById('discount10').addEventListener('click', () => discount = 0.1);
+document.getElementById('discount20').addEventListener('click', () => discount = 0.2);
+document.getElementById('discount0').addEventListener('click', () => discount = 0);
+document.getElementById('calculate').addEventListener('click', calculateFare);
+document.getElementById('resetStart').addEventListener('click', resetStartLocation);
+document.getElementById('corporation').addEventListener('change', (e) => {
+    document.getElementById('customPricing').classList.toggle('hidden', e.target.value !== 'custom');
+});
+
+function updateTariffLabel() {
+    const label = document.getElementById('tariffLabel');
+    const h = new Date().getHours();
+    label.textContent = (h >= 23 || h < 5) ? "Użyj taryf dziennych (1/3)" : "Użyj taryf noc/nd (2/4)";
+}
+
+async function getUserLocation(input) {
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+            const url = `https://api.geoapify.com/v1/geocode/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&apiKey=314c606d23124983b140135da170cc0c`;
+            const res = await fetch(url);
+            const data = await res.json();
+            input.value = data.features[0]?.properties.formatted || "Wpisz adres ręcznie";
+        }, null, { enableHighAccuracy: true });
+    }
+}
+
+function resetStartLocation() { getUserLocation(document.getElementById('start')); }
+
+document.addEventListener('DOMContentLoaded', () => {
+    getUserLocation(document.getElementById('start'));
+    updateTariffLabel();
+});
+
+// --- GEOMETRIA I OBLICZENIA ---
+async function geocode(addr) {
+    const query = addr.toLowerCase().includes('bydgoszcz') ? addr : `${addr}, Bydgoszcz`;
+    const url = `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(query)}&apiKey=314c606d23124983b140135da170cc0c`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.features.length > 0) return data.features[0].geometry.coordinates;
+    throw new Error(`Nie znaleziono: ${addr}`);
+}
+
+async function calculateFare() {
+    const corp = document.getElementById('corporation').value;
+    let pricing = pricingPlans[corp];
+    const waitTime = parseFloat(document.getElementById('waitTime').value) || 0;
+
+    if (corp === 'custom') {
+        pricing = {
+            startFee: parseFloat(document.getElementById('customStartFee').value) || 0,
+            tariffs: {
+                1: parseFloat(document.getElementById('customTariff1').value) || 0,
+                2: parseFloat(document.getElementById('customTariff2').value) || 0,
+                3: parseFloat(document.getElementById('customTariff3').value) || 0,
+                4: parseFloat(document.getElementById('customTariff4').value) || 0
+            },
+            waitFee: 40
+        };
+    }
+
+    try {
+        const startAddr = document.getElementById('start').value;
+        const endAddr = document.getElementById('end').value;
+        const coords = [await geocode(startAddr), await geocode(endAddr)];
+
+        const orsUrl = `https://api.openrouteservice.org/v2/directions/driving-car/geojson`;
+        const res = await fetch(orsUrl, {
+            method: 'POST',
+            headers: { 'Authorization': 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImEyNmJmYjhiNWM3NDRkMjE4ZmZiYzFiYzllM2E4MmVkIiwiaCI6Im11cm11cjY0In0=', 'Content-Type': 'application/json' },
+            body: JSON.stringify({ coordinates: coords })
+        });
+        const routeData = await res.json();
+        const totalDist = routeData.features[0].properties.summary.distance / 1000;
+        const routeCoords = routeData.features[0].geometry.coordinates;
+
+        // Podział na strefy
+        let cityDist = 0, outDist = 0;
+        for (let i = 0; i < routeCoords.length - 1; i++) {
+            const p = turf.point(routeCoords[i]);
+            const inByd = turf.booleanPointInPolygon(p, turf.buffer(bydgoszczBoundary, 0.02)) || turf.booleanPointInPolygon(p, lotniskoBoundary);
+            const d = turf.distance(p, turf.point(routeCoords[i+1]));
+            if (inByd) cityDist += d; else outDist += d;
+        }
+
+        const isNightNd = document.getElementById('tariffSwitch').checked || new Date().getDay() === 0;
+        const tCity = isNightNd ? 2 : 1;
+        const tOut = isNightNd ? 4 : 3;
+
+        let finalCost = pricing.startFee + (cityDist * pricing.tariffs[tCity]) + (outDist * pricing.tariffs[tOut]);
+        if (waitTime > 0) finalCost += (waitTime / 60) * pricing.waitFee;
+        if (discount) finalCost *= (1 - discount);
+
+        // --- PKT 4: ZYSK KIEROWCY ---
+        const fuelCost = (totalDist * (parseFloat(consInput.value)/100)) * parseFloat(fuelInput.value);
+        const profit = finalCost - fuelCost;
+
+        lastCalculated = { cost: finalCost, distance: totalDist, end: endAddr };
+
+        document.getElementById('result').innerHTML = `
+            <p class="text-xl font-bold text-green-400">${finalCost.toFixed(2)} zł</p>
+            <p class="text-xs text-gray-400">${totalDist.toFixed(2)} km (Miasto: ${cityDist.toFixed(1)} / Poza: ${outDist.toFixed(1)})</p>
+            <p class="text-xs text-gray-400">Postój: ${waitTime} min</p>
+        `;
+
+        document.getElementById('driverProfit').innerHTML = `
+            Zysk netto (paliwo): ~${profit.toFixed(2)} zł <br>
+            Koszt paliwa: ${fuelCost.toFixed(2)} zł
+        `;
+
+        // Pokaż przycisk kopiowania
+        document.getElementById('shareEstimate').classList.remove('hidden');
+
+        if (routeLayer) map.removeLayer(routeLayer);
+        routeLayer = L.geoJSON(routeData, { style: { color: '#3b82f6', weight: 5 } }).addTo(map);
+        map.fitBounds(routeLayer.getBounds());
+
+    } catch (e) { alert(e.message); }
+}
+
+// --- PKT 6: KOPIOWANIE DLA KLIENTA ---
+document.getElementById('shareEstimate').addEventListener('click', () => {
+    const text = `🚕 *WYCENA PRZEJAZDU*\n📍 Cel: ${lastCalculated.end}\n📏 Dystans: ${lastCalculated.distance.toFixed(2)} km\n💰 *SZACOWANY KOSZT: ${lastCalculated.cost.toFixed(2)} zł*\n\n_Dziękujemy za wybranie Taxi Zrzeszenie!_`;
+    navigator.clipboard.writeText(text);
+    alert("Skopiowano wycenę do schowka! Możesz ją wkleić na WhatsApp.");
+});
+</script>
+</body>
+</html>
