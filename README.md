@@ -38,6 +38,24 @@ do pracy wielu osób użyj Apache/nginx z PHP-FPM.
 php bin/kalkulator.php health
 ```
 
+## Wdrożenie na serwer
+
+Komplet skryptów i instrukcji: [`deploy/README.md`](deploy/README.md).
+
+VPS z SSH — dwie komendy:
+
+```bash
+bash deploy/deploy.sh --host=root@ADRES_IP                      # ze swojego komputera
+sudo bash deploy/install-vps.sh --domain=... --email=... --ssl  # raz, na serwerze
+```
+
+Instalator stawia nginx + osobną pulę PHP-FPM (limit czasu 300 s — zapytania Overpass
+dla dużego miasta trwają nawet 2 minuty), ustawia uprawnienia, cykliczne czyszczenie cache
+i opcjonalnie certyfikat Let's Encrypt. Obsłużone są też Apache i hosting współdzielony przez FTP.
+
+Konfigurację serwera trzymaj w `config/local.php` (wzór: `config/local.example.php`) —
+plik nie trafia do repozytorium i nie jest nadpisywany przy aktualizacji.
+
 ## Wersja konsolowa
 
 ```bash
@@ -117,7 +135,8 @@ jakość danych. Źródłem referencyjnym pozostaje **PRG / EMUiA (GUGiK)**.
 
 ```
 bin/kalkulator.php        wersja konsolowa
-config/config.php         konfiguracja
+config/config.php         konfiguracja (nadpisania: config/local.php)
+deploy/                   skrypty i instrukcje wdrożenia na serwer
 public/index.php          interfejs (mapa Leaflet)
 public/api.php            API JSON
 public/assets/            styl i logika front-endu

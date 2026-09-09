@@ -25,3 +25,12 @@ spl_autoload_register(static function (string $class): void {
 require_once __DIR__ . '/Support/Config.php';
 
 \Kalk\Support\Config::load(dirname(__DIR__) . '/config/config.php');
+
+// Nadpisania lokalne (dane serwera, adres kontaktowy) - plik poza repozytorium.
+$localConfig = dirname(__DIR__) . '/config/local.php';
+if (is_file($localConfig)) {
+    $overrides = require $localConfig;
+    if (is_array($overrides)) {
+        \Kalk\Support\Config::setMany($overrides);
+    }
+}

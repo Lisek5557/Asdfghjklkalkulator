@@ -1,0 +1,26 @@
+# Przykładowy VirtualHost dla Apache 2.4 + PHP-FPM.
+# Skopiuj do /etc/apache2/sites-available/granice.conf, podmień domenę i ścieżkę,
+# następnie: a2enmod proxy_fcgi rewrite headers expires && a2ensite granice && systemctl reload apache2
+
+<VirtualHost *:80>
+    ServerName granice.twojadomena.pl
+    DocumentRoot /var/www/granice/public
+
+    <Directory /var/www/granice/public>
+        AllowOverride All
+        Require all granted
+    </Directory>
+
+    # Kod aplikacji leży poza DocumentRoot i nie jest dostępny przez HTTP.
+
+    <FilesMatch \.php$>
+        SetHandler "proxy:unix:/run/php/granice.sock|fcgi://localhost"
+    </FilesMatch>
+
+    # Zapytania do Overpass API potrafią trwać ponad minutę.
+    ProxyTimeout 300
+    TimeOut 300
+
+    ErrorLog  ${APACHE_LOG_DIR}/granice-error.log
+    CustomLog ${APACHE_LOG_DIR}/granice-access.log combined
+</VirtualHost>

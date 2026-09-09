@@ -296,6 +296,21 @@ equals('remember woła producenta tylko raz', 1, $calls);
 check('czyszczenie cache', $cache->clear() > 0);
 @rmdir($cacheDir);
 
+/* --------------------------------------------------- konfiguracja lokalna */
+
+echo "Konfiguracja lokalna (config/local.php)\n";
+Config::set('contact_email', 'zmien-mnie@example.com');
+check('placeholder kontaktu jest odrzucany', !Config::contactConfigured());
+Config::set('contact_email', 'bez-malpy');
+check('adres bez @ jest odrzucany', !Config::contactConfigured());
+Config::setMany(['contact_email' => 'serwer@example.com', 'cache_ttl' => 123]);
+equals('nadpisanie z local.php ma pierwszeństwo', 'serwer@example.com', Config::str('contact_email'));
+equals('nadpisanie liczbowe', 123, Config::int('cache_ttl'));
+check('kontakt uznany za skonfigurowany', Config::contactConfigured());
+check('User-Agent zawiera kontakt', str_contains(Config::userAgent(), 'serwer@example.com'));
+Config::setMany(['nieistniejacy_klucz' => 'x']);
+equals('klucze spoza nadpisania zostają', 123, Config::int('cache_ttl'));
+
 /* ----------------------------------------------------------------- wynik */
 
 echo "\n";

@@ -1,0 +1,18 @@
+# Awaryjna ochrona dla hostingów, na których nie da się ustawić document root
+# na katalog public/. Kieruje ruch do public/ i blokuje dostęp do kodu aplikacji.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Blokada katalogów z kodem, konfiguracją i pamięcią podręczną.
+    RewriteRule ^(config|src|cache|tests|bin|deploy)/ - [F,L]
+
+    # Cała reszta obsługiwana z katalogu public/.
+    RewriteCond %{REQUEST_URI} !^/public/
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
+
+<FilesMatch "\.(md|json|lock|sh|dist)$">
+    Require all denied
+</FilesMatch>
+
+Options -Indexes
