@@ -1,0 +1,39 @@
+{
+  "version": 0.6,
+  "elements": [
+    {
+      "type": "relation",
+      "id": 111111,
+      "tags": {"boundary": "administrative", "admin_level": "8", "name": "Testowo"},
+      "members": [
+        {
+          "type": "way", "ref": 1, "role": "outer",
+          "geometry": [
+            {"lat": 52.0, "lon": 20.0},
+            {"lat": 52.0, "lon": 20.2},
+            {"lat": 52.1, "lon": 20.2}
+          ]
+        },
+        {
+          "type": "way", "ref": 2, "role": "outer",
+          "geometry": [
+            {"lat": 52.1, "lon": 20.2},
+            {"lat": 52.1, "lon": 20.0},
+            {"lat": 52.0, "lon": 20.0}
+          ]
+        },
+        {
+          "type": "way", "ref": 3, "role": "inner",
+          "geometry": [
+            {"lat": 52.04, "lon": 20.08},
+            {"lat": 52.04, "lon": 20.12},
+            {"lat": 52.06, "lon": 20.12},
+            {"lat": 52.06, "lon": 20.08},
+            {"lat": 52.04, "lon": 20.08}
+          ]
+        },
+        {"type": "node", "ref": 9, "role": "admin_centre"}
+      ]
+    }
+  ]
+}

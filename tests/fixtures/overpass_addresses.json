@@ -1,0 +1,26 @@
+{
+  "version": 0.6,
+  "elements": [
+    {"type": "node", "id": 1, "lat": 52.05, "lon": 20.10,
+     "tags": {"addr:housenumber": "10", "addr:street": "Łąkowa", "addr:city": "Testowo", "addr:postcode": "99-300"}},
+    {"type": "node", "id": 2, "lat": 52.051, "lon": 20.101,
+     "tags": {"addr:housenumber": "2", "addr:street": "Łąkowa", "addr:city": "Testowo", "addr:postcode": "99-300"}},
+    {"type": "node", "id": 3, "lat": 52.052, "lon": 20.102,
+     "tags": {"addr:housenumber": "2A", "addr:street": "Łąkowa", "addr:city": "Testowo"}},
+    {"type": "way", "id": 4, "center": {"lat": 52.053, "lon": 20.103},
+     "tags": {"addr:housenumber": "10", "addr:street": "Łąkowa", "addr:city": "Testowo", "addr:postcode": "99-300", "building": "house"}},
+    {"type": "node", "id": 5, "lat": 52.06, "lon": 20.11,
+     "tags": {"addr:housenumber": "1", "addr:street": "Aleja Zwycięstwa", "addr:city": "Testowo"}},
+    {"type": "node", "id": 6, "lat": 52.061, "lon": 20.111,
+     "tags": {"addr:housenumber": "12/3", "addr:street": "Aleja Zwycięstwa", "addr:city": "Testowo"}},
+    {"type": "node", "id": 7, "lat": 52.062, "lon": 20.112,
+     "tags": {"addr:housenumber": "7", "addr:place": "Testowo", "addr:city": "Testowo"}},
+    {"type": "node", "id": 8, "lat": 52.063, "lon": 20.113,
+     "tags": {"addr:housenumber": "100", "addr:street": "Łąkowa", "addr:city": "Testowo"}},
+    {"type": "node", "id": 9, "lat": 52.064, "lon": 20.114,
+     "tags": {"addr:housenumber": "9", "addr:city": "Inne Miasto", "addr:street": "Krótka"}},
+    {"type": "node", "id": 10, "lat": 52.065, "lon": 20.115, "tags": {"building": "yes"}},
+    {"type": "relation", "id": 11, "center": {"lat": 52.066, "lon": 20.116},
+     "tags": {"addr:housenumber": "3", "addr:street": "Łąkowa", "addr:city": "Testowo", "building": "apartments"}}
+  ]
+}
