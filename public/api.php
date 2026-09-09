@@ -23,7 +23,10 @@ use Kalk\Support\FileCache;
 
 mb_internal_encoding('UTF-8');
 ini_set('display_errors', '0');
-set_time_limit(0);
+// Na części hostingów set_time_limit jest wyłączone przez disable_functions.
+if (function_exists('set_time_limit')) {
+    @set_time_limit(0);
+}
 
 $respond = static function (array $payload, int $status = 200): never {
     http_response_code($status);
@@ -176,13 +179,37 @@ try {
         }
 
         case 'health': {
+            $maxExecution = (int) ini_get('max_execution_time');
+            $hints = [];
+            if (!function_exists('curl_init')) {
+                $hints[] = 'Brak rozszerzenia curl - aplikacja nie wykona zapytań do API.';
+            }
+            if (!(new FileCache())->isEnabled()) {
+                $hints[] = 'Katalog cache/ nie jest zapisywalny - nadaj mu prawa 775 (lub 777 na hostingu FTP).';
+            }
+            if (!Config::contactConfigured()) {
+                $hints[] = 'Uzupełnij contact_email w config/local.php - wymaga go regulamin API OpenStreetMap.';
+            }
+            if ($maxExecution > 0 && $maxExecution < 60) {
+                $hints[] = sprintf(
+                    'max_execution_time = %d s. Dla dużych miast to za mało; pobieraj mniejsze obszary '
+                    . 'albo poproś hosting o zwiększenie limitu.',
+                    $maxExecution
+                );
+            }
+
             $respond([
                 'ok' => true,
                 'php' => PHP_VERSION,
                 'curl' => function_exists('curl_init'),
+                'mbstring' => function_exists('mb_strtolower'),
                 'cache_writable' => (new FileCache())->isEnabled(),
                 'contact_configured' => Config::contactConfigured(),
+                'max_execution_time' => $maxExecution,
+                'memory_limit' => ini_get('memory_limit'),
+                'overpass_query_timeout' => (new \Kalk\Geo\Overpass())->effectiveTimeout(),
                 'overpass_endpoints' => Config::arr('overpass_endpoints'),
+                'hints' => $hints,
             ]);
         }
 

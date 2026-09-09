@@ -296,6 +296,21 @@ equals('remember woła producenta tylko raz', 1, $calls);
 check('czyszczenie cache', $cache->clear() > 0);
 @rmdir($cacheDir);
 
+echo "Limit czasu zapytania dopasowany do limitu PHP\n";
+$previousLimit = ini_get('max_execution_time');
+ini_set('max_execution_time', '45');
+$limited = new FakeOverpass(['area(' => ['elements' => []]]);
+equals('limit PHP 45 s -> timeout 30 s w zapytaniu', 30, $limited->effectiveTimeout());
+(new AddressService($limited))->collect(['mode' => 'area', 'osm_id' => 1, 'name' => 'x']);
+check('zapytanie niesie dopasowany timeout', str_contains($limited->lastQueries[0], '[timeout:30]'));
+
+ini_set('max_execution_time', '20');
+equals('bardzo niski limit PHP -> minimum 20 s', 20, (new FakeOverpass())->effectiveTimeout());
+
+ini_set('max_execution_time', '0');
+equals('brak limitu PHP -> wartość z konfiguracji', Config::int('overpass_timeout', 150), (new FakeOverpass())->effectiveTimeout());
+ini_set('max_execution_time', (string) $previousLimit);
+
 /* --------------------------------------------------- konfiguracja lokalna */
 
 echo "Konfiguracja lokalna (config/local.php)\n";

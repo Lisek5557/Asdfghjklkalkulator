@@ -65,6 +65,24 @@ class Overpass
         );
     }
 
+    /**
+     * Limit czasu wpisywany do zapytania Overpass QL.
+     *
+     * Na hostingu współdzielonym PHP bywa ograniczone do 30-60 s. Zapytanie, które trwa
+     * dłużej niż pozwala PHP, kończy się urwaniem skryptu bez czytelnego komunikatu,
+     * dlatego prosimy serwer Overpass o wynik w czasie mieszczącym się w limicie
+     * (z marginesem na transfer i przetworzenie odpowiedzi).
+     */
+    public function effectiveTimeout(): int
+    {
+        $configured = Config::int('overpass_timeout', 150);
+        $phpLimit = (int) ini_get('max_execution_time');
+        if ($phpLimit > 0) {
+            $configured = max(20, min($configured, $phpLimit - 15));
+        }
+        return $configured;
+    }
+
     /** Zwraca elementy z odpowiedzi Overpassa. @return array<int,array<string,mixed>> */
     public static function elements(array $response): array
     {
@@ -81,7 +99,7 @@ class Overpass
      */
     public function adminHierarchy(float $lat, float $lon): array
     {
-        $timeout = Config::int('overpass_timeout', 150);
+        $timeout = $this->effectiveTimeout();
         $ql = <<<QL
         [out:json][timeout:{$timeout}];
         is_in({$lat},{$lon})->.areas;
@@ -125,7 +143,7 @@ class Overpass
      */
     public function relationGeometry(int $relationId): ?array
     {
-        $timeout = Config::int('overpass_timeout', 150);
+        $timeout = $this->effectiveTimeout();
         $ql = <<<QL
         [out:json][timeout:{$timeout}];
         rel({$relationId});
@@ -149,7 +167,7 @@ class Overpass
     public function addressesInRelation(int $relationId): array
     {
         $areaId = 3_600_000_000 + $relationId;
-        $timeout = Config::int('overpass_timeout', 150);
+        $timeout = $this->effectiveTimeout();
         $ql = <<<QL
         [out:json][timeout:{$timeout}];
         area({$areaId})->.searchArea;
@@ -172,7 +190,7 @@ class Overpass
     public function addressesAround(float $lat, float $lon, int $radius): array
     {
         $radius = max(100, min(20000, $radius));
-        $timeout = Config::int('overpass_timeout', 150);
+        $timeout = $this->effectiveTimeout();
         $ql = <<<QL
         [out:json][timeout:{$timeout}];
         (
@@ -195,7 +213,7 @@ class Overpass
     public function addressesInRelationByPlace(int $relationId, string $placeName): array
     {
         $areaId = 3_600_000_000 + $relationId;
-        $timeout = Config::int('overpass_timeout', 150);
+        $timeout = $this->effectiveTimeout();
         $name = addcslashes($placeName, '"\\');
         $ql = <<<QL
         [out:json][timeout:{$timeout}];
@@ -222,7 +240,7 @@ class Overpass
     public function streetsInRelation(int $relationId): array
     {
         $areaId = 3_600_000_000 + $relationId;
-        $timeout = Config::int('overpass_timeout', 150);
+        $timeout = $this->effectiveTimeout();
         $ql = <<<QL
         [out:json][timeout:{$timeout}];
         area({$areaId})->.searchArea;

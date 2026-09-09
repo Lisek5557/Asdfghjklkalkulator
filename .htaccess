@@ -1,18 +1,28 @@
-# Awaryjna ochrona dla hostingów, na których nie da się ustawić document root
-# na katalog public/. Kieruje ruch do public/ i blokuje dostęp do kodu aplikacji.
+# Ochrona dla hostingów, na których nie da się wskazać katalogu public/
+# jako katalogu domeny. Ruch trafia do public/, a kod aplikacji pozostaje niedostępny.
+
+Options -Indexes
+DirectoryIndex index.php
+
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
     # Blokada katalogów z kodem, konfiguracją i pamięcią podręczną.
-    RewriteRule ^(config|src|cache|tests|bin|deploy)/ - [F,L]
+    RewriteRule ^(config|src|cache|tests|bin|deploy)(/|$) - [F,L]
 
-    # Cała reszta obsługiwana z katalogu public/.
-    RewriteCond %{REQUEST_URI} !^/public/
+    # Przepisanie do public/ wykonywane tylko dla pierwotnego żądania.
+    # Warunek na REDIRECT_STATUS zapobiega pętli przepisań i działa również wtedy,
+    # gdy aplikacja leży w podkatalogu domeny (wtedy REQUEST_URI nie zaczyna się od /public/).
+    RewriteCond %{ENV:REDIRECT_STATUS} ^$
     RewriteRule ^(.*)$ public/$1 [L]
 </IfModule>
 
-<FilesMatch "\.(md|json|lock|sh|dist)$">
-    Require all denied
+<FilesMatch "\.(md|sh|dist|lock|example\.php)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
 </FilesMatch>
-
-Options -Indexes

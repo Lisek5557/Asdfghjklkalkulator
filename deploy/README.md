@@ -1,69 +1,145 @@
 # Wdrożenie na serwer
 
-Trzy scenariusze — wybierz ten, który pasuje do Twojego hostingu.
+- **[A. Hosting FTP](#a-hosting-ftp-współdzielony)** — zwykły hosting z panelem, bez SSH
+- **[B. VPS z dostępem SSH](#b-vps-z-dostępem-ssh)** — pełna kontrola nad serwerem
+- **[C. Apache zamiast nginx](#c-apache-zamiast-nginx)**
 
 ---
 
-## A. VPS z dostępem SSH (zalecane)
+## A. Hosting FTP (współdzielony)
 
-Najprościej: wgrywasz kod ze swojego komputera, a potem raz uruchamiasz instalator na serwerze.
+### Wymagania hostingu
 
-### Krok 1 — wgraj pliki na serwer
+- **PHP 8.0+** z rozszerzeniami **`curl`** i **`mbstring`**,
+- możliwość wykonywania zapytań wychodzących HTTPS (mają ją prawie wszystkie hostingi).
 
-Na swoim komputerze, w katalogu projektu:
+Nie jest potrzebna baza danych, Composer ani dostęp SSH.
+
+### Sposób 1 — automatyczna wysyłka (jedna komenda)
+
+Na swoim komputerze (potrzebny PHP z rozszerzeniem `ftp`):
 
 ```bash
 git clone -b claude/php-maps-addresses-yi87io https://github.com/Lisek5557/Asdfghjklkalkulator.git
 cd Asdfghjklkalkulator
 
-bash deploy/deploy.sh --host=root@ADRES_IP --dry-run   # podgląd, nic nie zmienia
-bash deploy/deploy.sh --host=root@ADRES_IP             # właściwa wysyłka
+# podgląd - pokaże listę plików, nic nie wyśle
+php deploy/ftp-upload.php --host=ftp.twojhosting.pl --user=login --dir=/public_html --dry-run
+
+# właściwa wysyłka (skrypt zapyta o hasło)
+php deploy/ftp-upload.php --host=ftp.twojhosting.pl --user=login --dir=/public_html
 ```
 
-Skrypt przed wysyłką uruchamia testy, pomija `.git`, `cache`, `tests` i **nie nadpisuje**
-`config/local.php` na serwerze.
+Skrypt:
 
-Alternatywnie, jeśli serwer ma dostęp do repozytorium, możesz pominąć ten krok
-i użyć `--repo=` w kroku 2.
+- wysyła tylko pliki potrzebne do działania (bez `.git`, testów i katalogu `deploy`),
+- **nie nadpisuje `config/local.php`** na serwerze i **niczego nie kasuje**,
+- przy kolejnych uruchomieniach wysyła wyłącznie zmienione pliki (porównuje rozmiar i datę),
+- sam zakłada katalog `cache/` i próbuje nadać mu prawa zapisu,
+- na koniec podaje adres do sprawdzenia poprawności instalacji.
 
-### Krok 2 — jednorazowa instalacja na serwerze
+Jeśli hosting wymaga szyfrowania, dodaj `--ssl`. Pełna lista opcji: `php deploy/ftp-upload.php --help`.
 
-Zaloguj się przez SSH i uruchom:
+### Sposób 2 — paczka ZIP i FileZilla
+
+Gdy wolisz wgrywać pliki ręcznie:
+
+```bash
+php deploy/build-package.php --email=twoj@adres.pl
+```
+
+Powstanie `granice-ftp.zip` z gotową konfiguracją i plikiem `INSTRUKCJA.txt` w środku.
+Rozpakuj i wgraj całą zawartość do katalogu domeny (`public_html`, `htdocs` lub `www`).
+
+> **Ważne w FileZilli:** włącz *Serwer → Wymuś wyświetlanie ukrytych plików*, inaczej
+> pominiesz pliki `.htaccess`, które odpowiadają za bezpieczeństwo instalacji.
+
+### Po wgraniu — trzy rzeczy do sprawdzenia
+
+**1. Katalog domeny.** Jeśli panel hostingu pozwala wskazać katalog domeny (document root),
+ustaw go na podkatalog **`public`**. To najbezpieczniejszy wariant — kod aplikacji jest
+wtedy fizycznie poza zasięgiem przeglądarki.
+
+Jeśli panel na to nie pozwala, nic nie rób: dołączony `.htaccess` sam kieruje ruch do
+`public/` i blokuje dostęp do `config/`, `src/`, `cache/`, `bin/` i `tests/`. Dodatkowo
+w każdym z tych katalogów leży własny `.htaccess` z blokadą — działa nawet wtedy, gdy
+hosting ma wyłączony `mod_rewrite`. Gdyby i to zawiodło, plik `index.php` w katalogu
+głównym przekieruje odwiedzających do `public/`.
+
+**2. Prawa zapisu do `cache/`.** W kliencie FTP: prawy przycisk na katalogu `cache` →
+*Uprawnienia pliku* → **775**. Jeśli aplikacja nadal zgłasza brak zapisu — **777**.
+Bez tego wszystko działa, ale każde zapytanie idzie od nowa do API (wolno i niegrzecznie
+wobec serwerów OpenStreetMap).
+
+**3. Adres kontaktowy.** Zmień nazwę `config/local.example.php` na `config/local.php`
+i wpisz w nim swój e-mail. Wymaga tego regulamin API OpenStreetMap. Przy pakowaniu
+z opcją `--email=` plik jest już gotowy.
+
+### Sprawdzenie instalacji
+
+Wejdź na `https://twojadomena.pl/api.php?action=health`. Powinno pojawić się:
+
+```json
+{"ok":true,"php":"8.2.x","curl":true,"mbstring":true,"cache_writable":true,
+ "contact_configured":true,"max_execution_time":120,"hints":[]}
+```
+
+Pole **`hints`** wypisuje po polsku wszystko, co wymaga poprawy. Puste `hints` = wszystko gotowe.
+
+### Najczęstsze problemy na hostingu współdzielonym
+
+| Objaw | Przyczyna i rozwiązanie |
+|---|---|
+| `"cache_writable":false` | brak praw zapisu — ustaw CHMOD 775 (lub 777) na katalogu `cache` |
+| `"contact_configured":false` | brak `config/local.php` albo pusty `contact_email` |
+| `"curl":false` | hosting nie ma rozszerzenia curl — poproś obsługę o włączenie |
+| Lista plików zamiast strony | katalog domeny nie wskazuje na `public/`, a `.htaccess` nie został wgrany (ukryte pliki w FileZilli) |
+| Błąd 500 zaraz po wgraniu | hosting nie obsługuje którejś dyrektywy `.htaccess` — usuń plik `.htaccess` z katalogu głównego i ustaw katalog domeny na `public/` |
+| Przerwane pobieranie adresów dużego miasta | `max_execution_time` poniżej 60 s (widać w `health`) — poproś hosting o zwiększenie limitu albo pobieraj mniejsze obszary |
+
+Aplikacja sama dopasowuje limit czasu zapytania do Overpass do limitu PHP na hostingu,
+więc zamiast urwanego skryptu dostaniesz czytelny komunikat.
+
+### Aktualizacja
+
+```bash
+php deploy/ftp-upload.php --host=ftp.twojhosting.pl --user=login --dir=/public_html
+```
+
+Wysłane zostaną tylko zmienione pliki; `config/local.php` i zawartość `cache/` zostają nietknięte.
+
+---
+
+## B. VPS z dostępem SSH
+
+Dwie komendy. Najpierw wysyłka ze swojego komputera:
+
+```bash
+bash deploy/deploy.sh --host=root@ADRES_IP --dry-run   # podgląd
+bash deploy/deploy.sh --host=root@ADRES_IP             # wysyłka
+```
+
+Potem jednorazowa instalacja na serwerze:
 
 ```bash
 cd /var/www/granice
 sudo bash deploy/install-vps.sh --domain=granice.twojadomena.pl --email=admin@twojadomena.pl --ssl
 ```
 
-Bez własnej domeny (dostęp po IP, bez HTTPS):
+Instalator (Debian 11/12, Ubuntu 20.04+, można uruchamiać wielokrotnie):
 
-```bash
-sudo bash deploy/install-vps.sh --email=admin@twojadomena.pl
-```
-
-Instalator:
-
-- instaluje nginx, PHP-FPM, `php-curl`, `php-mbstring`, git i rsync,
-- zakłada `config/local.php` z Twoim adresem kontaktowym (wymaga go regulamin API OSM),
-- tworzy **osobną pulę PHP-FPM** z limitem czasu 300 s i pamięcią 512 MB — zapytania
-  do Overpass dla dużego miasta trwają nawet dwie minuty i domyślne limity by je ucięły,
-- konfiguruje nginx (`root` na `public/`, gzip, blokada plików ukrytych, `fastcgi_read_timeout 300`),
-- ustawia uprawnienia: kod tylko do odczytu dla `www-data`, katalog `cache/` do zapisu,
+- instaluje nginx, PHP-FPM, `php-curl`, `php-mbstring`,
+- tworzy **osobną pulę PHP-FPM** z limitem czasu 300 s i pamięcią 512 MB — zapytania do
+  Overpass dla dużego miasta trwają nawet dwie minuty i domyślne limity by je ucięły,
+- konfiguruje nginx (`root` na `public/`, gzip, `fastcgi_read_timeout` zgodny z pulą),
+- ustawia uprawnienia: kod tylko do odczytu dla `www-data`, zapis wyłącznie do `cache/`,
 - dodaje cotygodniowe czyszczenie cache starszego niż 14 dni,
-- opcjonalnie (`--ssl`) wystawia certyfikat Let's Encrypt i włącza przekierowanie na HTTPS,
-- na koniec sam sprawdza `api.php?action=health` i wypisuje adres działającej aplikacji.
+- z opcją `--ssl` wystawia certyfikat Let's Encrypt i włącza przekierowanie na HTTPS,
+- na końcu sam sprawdza `api.php?action=health`.
 
-Skrypt można uruchamiać wielokrotnie — nie psuje istniejącej konfiguracji.
+Kolejne aktualizacje to już sam `deploy.sh`.
 
-### Kolejne aktualizacje
-
-Wystarczy sam `deploy.sh` — instalatora nie trzeba już uruchamiać:
-
-```bash
-bash deploy/deploy.sh --host=root@ADRES_IP
-```
-
-### Dostępne opcje
+### Opcje
 
 | Skrypt | Opcja | Znaczenie |
 |---|---|---|
@@ -77,12 +153,15 @@ bash deploy/deploy.sh --host=root@ADRES_IP
 | | `--ssl` | certyfikat Let's Encrypt (wymaga `--domain`) |
 | | `--repo=` | pobierz kod z repozytorium zamiast wgranego ręcznie |
 | | `--dir=` | katalog aplikacji |
+| `ftp-upload.php` | `--host= --user= --dir=` | dane połączenia FTP |
+| | `--ssl` / `--active` | FTPS / tryb aktywny |
+| | `--dry-run` / `--force` / `--quiet` | podgląd / wyślij wszystko / mniej komunikatów |
+| `build-package.php` | `--email=` | wpisz adres kontaktowy do paczki |
+| | `--out=` | ścieżka pliku ZIP |
 
 ---
 
-## B. Apache zamiast nginx
-
-Wgraj pliki jak w kroku 1, potem:
+## C. Apache zamiast nginx
 
 ```bash
 sudo apt install apache2 php-fpm php-curl php-mbstring
@@ -90,58 +169,21 @@ sudo a2enmod proxy_fcgi rewrite headers expires
 sudo cp deploy/apache-vhost.conf.example /etc/apache2/sites-available/granice.conf
 sudo nano /etc/apache2/sites-available/granice.conf      # podmień domenę i ścieżkę
 sudo a2ensite granice && sudo systemctl reload apache2
-```
-
-Utwórz `config/local.php` (wzór w `config/local.example.php`) i nadaj prawa zapisu do `cache/`:
-
-```bash
 sudo chown -R www-data:www-data /var/www/granice/cache
 ```
 
----
-
-## C. Hosting współdzielony (FTP, bez SSH)
-
-1. Wgraj **całą zawartość projektu** przez FTP.
-2. Jeśli panel pozwala ustawić katalog domeny (document root) — wskaż `public/`. To najbezpieczniejsze.
-3. Jeśli nie pozwala — zostaw pliki w katalogu głównym. Dołączony `.htaccess` sam przekieruje
-   ruch do `public/` i zablokuje dostęp do `config/`, `src/`, `cache/`, `tests/`, `bin/` i `deploy/`.
-4. Skopiuj `config/local.example.php` na `config/local.php` i wpisz swój adres e-mail.
-5. Nadaj katalogowi `cache/` prawa zapisu (w kliencie FTP: CHMOD 775, w razie problemów 777).
-6. Sprawdź `https://twojadomena.pl/api.php?action=health`.
-
-Wymagania hostingu: **PHP 8.0+** z rozszerzeniami `curl` i `mbstring` oraz możliwość wykonywania
-zapytań wychodzących HTTPS. Uwaga: część tanich hostingów ma `max_execution_time` na sztywno
-30–60 s — to za mało dla dużego miasta. Wtedy pobieraj adresy dla mniejszych obszarów
-albo przenieś się na VPS.
+Utwórz `config/local.php` na wzór `config/local.example.php`.
 
 ---
-
-## Po wdrożeniu — sprawdzenie
-
-```bash
-curl "https://twojadomena.pl/api.php?action=health"
-```
-
-Oczekiwana odpowiedź:
-
-```json
-{"ok":true,"php":"8.x","curl":true,"cache_writable":true,"contact_configured":true,...}
-```
-
-| Objaw | Przyczyna i rozwiązanie |
-|---|---|
-| `"cache_writable":false` | brak praw zapisu do `cache/` — `chown -R www-data:www-data cache` |
-| `"contact_configured":false` | brak lub zły `contact_email` w `config/local.php` |
-| `"curl":false` | brak rozszerzenia — `apt install php-curl` i restart PHP-FPM |
-| Błąd 504 przy pobieraniu adresów | za krótki limit czasu — zwiększ `fastcgi_read_timeout` i `request_terminate_timeout` |
-| Pusta strona / błąd 500 | `tail -f /var/log/nginx/granice-error.log` oraz `journalctl -u php8.x-fpm -n 50` |
 
 ## Bezpieczeństwo
 
-- Katalog `public/` jest jedynym udostępnianym przez HTTP — kod, konfiguracja i cache leżą poza nim.
-- Aplikacja nie przyjmuje danych od użytkownika poza parametrami wyszukiwania; nie ma bazy,
-  logowania ani wgrywania plików.
-- `config/local.php` nie trafia do repozytorium i nie jest nadpisywany przy aktualizacji.
-- Zalecane: włącz HTTPS (`--ssl`), a jeśli serwis ma być prywatny — dołóż w nginx
-  `auth_basic` albo ogranicz dostęp `allow`/`deny` po adresie IP.
+- Przez HTTP udostępniany jest wyłącznie katalog `public/`; kod, konfiguracja i cache leżą poza nim
+  (a na hostingu FTP są dodatkowo blokowane plikami `.htaccess`).
+- Aplikacja nie ma bazy danych, logowania ani wgrywania plików; jedyne dane od użytkownika
+  to fraza wyszukiwania i identyfikatory obiektów OSM.
+- `config/local.php` nigdy nie trafia do repozytorium ani nie jest nadpisywany przy aktualizacji.
+- Hasło FTP nie jest zapisywane — skrypt pyta o nie przy uruchomieniu (można też podać
+  je zmienną `FTP_PASSWORD`, żeby nie zostawiać go w historii poleceń).
+- Zalecane: włącz HTTPS. Jeśli serwis ma być prywatny, dołóż ochronę hasłem
+  (na hostingu: „katalog chroniony hasłem” w panelu; na VPS: `auth_basic` w nginx).

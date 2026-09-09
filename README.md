@@ -42,7 +42,18 @@ php bin/kalkulator.php health
 
 Komplet skryptów i instrukcji: [`deploy/README.md`](deploy/README.md).
 
-VPS z SSH — dwie komendy:
+**Hosting FTP** — jedna komenda ze swojego komputera:
+
+```bash
+php deploy/ftp-upload.php --host=ftp.twojhosting.pl --user=login --dir=/public_html
+```
+
+Wysyła tylko zmienione pliki, nie nadpisuje konfiguracji serwera i niczego nie kasuje.
+Kto woli FileZillę, buduje paczkę: `php deploy/build-package.php --email=twoj@adres.pl`.
+Aplikacja działa też wtedy, gdy hosting nie pozwala wskazać `public/` jako katalogu domeny —
+dołączone pliki `.htaccess` kierują ruch i blokują dostęp do kodu.
+
+**VPS z SSH** — dwie komendy:
 
 ```bash
 bash deploy/deploy.sh --host=root@ADRES_IP                      # ze swojego komputera
@@ -51,10 +62,12 @@ sudo bash deploy/install-vps.sh --domain=... --email=... --ssl  # raz, na serwer
 
 Instalator stawia nginx + osobną pulę PHP-FPM (limit czasu 300 s — zapytania Overpass
 dla dużego miasta trwają nawet 2 minuty), ustawia uprawnienia, cykliczne czyszczenie cache
-i opcjonalnie certyfikat Let's Encrypt. Obsłużone są też Apache i hosting współdzielony przez FTP.
+i opcjonalnie certyfikat Let's Encrypt.
 
 Konfigurację serwera trzymaj w `config/local.php` (wzór: `config/local.example.php`) —
 plik nie trafia do repozytorium i nie jest nadpisywany przy aktualizacji.
+Po wdrożeniu sprawdź `https://twojadomena.pl/api.php?action=health` — pole `hints`
+wypisuje po polsku wszystko, co wymaga poprawy.
 
 ## Wersja konsolowa
 
@@ -136,7 +149,7 @@ jakość danych. Źródłem referencyjnym pozostaje **PRG / EMUiA (GUGiK)**.
 ```
 bin/kalkulator.php        wersja konsolowa
 config/config.php         konfiguracja (nadpisania: config/local.php)
-deploy/                   skrypty i instrukcje wdrożenia na serwer
+deploy/                   wdrożenie: FTP, VPS, Apache + instrukcje
 public/index.php          interfejs (mapa Leaflet)
 public/api.php            API JSON
 public/assets/            styl i logika front-endu
