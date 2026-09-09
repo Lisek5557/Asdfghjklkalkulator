@@ -6,6 +6,8 @@ Aplikacja w PHP (bez zależności zewnętrznych) z mapą, która po wpisaniu naz
 - pokazuje **hierarchię administracyjną** wraz z kodami TERYT i przybliżoną powierzchnią,
 - **wypisuje wszystkie adresy z numerami budynków** należące do danej miejscowości,
   pogrupowane po ulicach i posortowane naturalnie (1, 1A, 2, 10, 12/3, 100),
+- pozwala **odhaczać zrobione ulice** — oznaczona ulica jest wygaszana razem ze swoimi
+  punktami na mapie, a postęp („zrobione 12 z 48 ulic") zapamiętuje przeglądarka,
 - pozwala wyeksportować wykaz do **CSV / TXT / JSON / GeoJSON**.
 
 Dane pochodzą z OpenStreetMap: **Nominatim** (wyszukiwanie + gotowe poligony granic)
@@ -157,7 +159,8 @@ src/Support/              config, cache, HTTP, limiter, tekst, numery budynków
 src/Geo/                  Nominatim, Overpass, geometria GeoJSON, poziomy administracyjne
 src/Service/              wyszukiwanie miejsc, granice, adresy
 src/Export/               CSV / TXT / JSON / GeoJSON
-tests/run.php             testy (bez sieci, na fixture'ach)
+tests/run.php             testy PHP (bez sieci, na fixture'ach)
+tests/ui/                 testy interfejsu w przeglądarce (Playwright)
 ```
 
 ## Testy
@@ -170,6 +173,16 @@ Testy działają offline — korzystają z atrap klientów API i plików z `test
 Pokrywają m.in. sklejanie granic z odcinków Overpassa (z dziurami i odwróconymi odcinkami),
 upraszczanie geometrii, naturalne sortowanie numerów budynków, deduplikację adresów,
 wybór trybu pobierania adresów oraz eksport.
+
+Testy interfejsu w przeglądarce (lista przy 12 000 adresów, checklista, wygaszanie
+punktów na mapie) — instrukcja w [`tests/ui/README.md`](tests/ui/README.md):
+
+```bash
+npm install playwright leaflet
+php -S 127.0.0.1:8801 -t public &
+node tests/ui/lista-adresow.spec.js
+node tests/ui/mapa.spec.js
+```
 
 ## Licencja danych
 

@@ -17,7 +17,11 @@ body {
     color: var(--ink);
     display: flex;
     flex-direction: column;
-    min-height: 100vh;
+    /* Stała wysokość ekranu: przewija się panel boczny, a nie cała strona.
+       Bez tego przy kilkuset ulicach panel rozciągał stronę na tysiące pikseli,
+       rozciągając razem z nią mapę. */
+    height: 100vh;
+    overflow: hidden;
 }
 
 .topbar {
@@ -79,7 +83,11 @@ button:disabled { opacity: .55; cursor: progress; }
 .sidebar {
     width: 420px;
     flex: 0 0 420px;
+    /* min-height: 0 pozwala elementowi flex skurczyć się poniżej wysokości treści
+       - dopiero wtedy overflow-y faktycznie przewija panel. */
+    min-height: 0;
     overflow-y: auto;
+    overscroll-behavior: contain;
     padding: 14px;
     display: flex;
     flex-direction: column;
@@ -156,7 +164,7 @@ button:disabled { opacity: .55; cursor: progress; }
 }
 .street > summary::-webkit-details-marker { display: none; }
 .street .count { color: var(--muted); font-weight: 500; font-size: 12px; }
-.numbers { display: flex; flex-wrap: wrap; gap: 5px; padding: 10px; }
+.numbers { display: block; }
 .num {
     font-size: 12.5px;
     padding: 3px 8px;
@@ -168,7 +176,7 @@ button:disabled { opacity: .55; cursor: progress; }
 .num:hover { border-color: var(--accent); color: var(--accent); }
 .num.no-geo { opacity: .55; cursor: default; }
 
-.map-wrap { position: relative; flex: 1; min-width: 0; }
+.map-wrap { position: relative; flex: 1; min-width: 0; min-height: 0; }
 #map { position: absolute; inset: 0; }
 
 .status {
@@ -205,7 +213,111 @@ button:disabled { opacity: .55; cursor: progress; }
 .leaflet-popup-content { font-size: 13px; line-height: 1.45; }
 
 @media (max-width: 900px) {
+    /* Na wąskim ekranie wracamy do przewijania całej strony - panel i mapa jeden pod drugim. */
+    body { height: auto; overflow: auto; }
     .layout { flex-direction: column; }
-    .sidebar { width: 100%; flex: none; max-height: 55vh; border-right: none; border-bottom: 1px solid var(--line); }
-    .map-wrap { height: 45vh; flex: none; }
+    .sidebar { width: 100%; flex: none; max-height: 70vh; border-right: none; border-bottom: 1px solid var(--line); }
+    .map-wrap { height: 55vh; flex: none; }
+}
+
+/* ---------------------------------------------- postęp i checklista "zrobione" */
+
+.progress { margin-bottom: 12px; }
+.progress-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 12.5px;
+    color: var(--muted);
+    margin-bottom: 5px;
+}
+.progress-track {
+    height: 6px;
+    border-radius: 999px;
+    background: var(--line);
+    overflow: hidden;
+}
+.progress-fill {
+    height: 100%;
+    width: 0;
+    border-radius: 999px;
+    background: #059669;
+    transition: width .2s ease;
+}
+.link-button {
+    border: none;
+    background: none;
+    padding: 0;
+    font-size: 12.5px;
+    color: var(--accent);
+    text-decoration: underline;
+}
+.link-button:hover { color: var(--accent-dark); }
+
+.toolbar.options { flex-wrap: wrap; gap: 14px; }
+
+/* ------------------------------------------------------- lista ulic i numerów */
+
+.street > summary {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    align-items: center;
+}
+.street-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.street .count { flex: 0 0 auto; white-space: nowrap; }
+
+.done-btn {
+    flex: 0 0 auto;
+    padding: 3px 10px;
+    font-size: 11.5px;
+    font-weight: 600;
+    border-radius: 999px;
+    border: 1px solid #a7f3d0;
+    background: #ecfdf5;
+    color: #047857;
+}
+.done-btn:hover { border-color: #059669; background: #d1fae5; color: #065f46; }
+
+/* Ulica oznaczona jako zrobiona - wygaszona, ale wciąż czytelna i dostępna. */
+.street.done { opacity: .5; }
+.street.done > summary { background: #f1f5f9; }
+.street.done .street-name { text-decoration: line-through; }
+.street.done .done-btn { border-color: var(--line); background: #fff; color: var(--muted); }
+.street.done:hover { opacity: .7; }
+
+.numbers-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(62px, 1fr));
+    gap: 4px;
+    padding: 10px;
+}
+.num {
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.load-more {
+    width: 100%;
+    margin-top: 4px;
+    padding: 9px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    background: #f8fafc;
+    border-style: dashed;
+}
+.load-more.small {
+    margin: 0 10px 10px;
+    width: calc(100% - 20px);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 6px 10px;
 }

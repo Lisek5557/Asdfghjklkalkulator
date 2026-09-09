@@ -4,13 +4,25 @@
 
     var API = 'api.php';
 
+    // Ile ulic renderujemy na raz i ile numerów pokazujemy w rozwiniętej ulicy.
+    // Bez tego lista dla dużego miasta (kilkaset ulic, dziesiątki tysięcy numerów)
+    // budowałaby kilkadziesiąt tysięcy elementów DOM naraz i zawieszała przeglądarkę.
+    var CHUNK_STREETS = 40;
+    var CHUNK_NUMBERS = 150;
+    var NO_STREET = 'Adresy bez nazwy ulicy';
+
     var state = {
         place: null,
-        boundaryLayers: {},   // admin_level -> L.GeoJSON
+        boundaryLayers: {},     // admin_level -> L.GeoJSON
         addressLayer: null,
         addresses: [],
         streets: [],
-        markerIndex: {}       // "osm_type/osm_id" -> [lat, lon]
+        visible: [],            // ulice po zastosowaniu filtra
+        renderedCount: 0,
+        done: {},               // klucz ulicy -> true (checklista "zrobione")
+        storageKey: '',
+        markersByStreet: {},    // klucz ulicy -> [L.CircleMarker]
+        observer: null
     };
 
     var el = function (id) { return document.getElementById(id); };
@@ -55,6 +67,37 @@
 
     function formatNumber(value) {
         return Number(value || 0).toLocaleString('pl-PL');
+    }
+
+    // Klucz ulicy odporny na wielkość liter i polskie znaki - musi dawać ten sam wynik
+    // dla nazwy grupy i dla pojedynczego adresu, żeby wygaszanie objęło też mapę.
+    function streetKey(name) {
+        return String(name || NO_STREET)
+            .replace(/ł/g, 'l').replace(/Ł/g, 'L')
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase().replace(/\s+/g, ' ').trim();
+    }
+
+    function loadDone() {
+        state.done = {};
+        if (!state.storageKey) { return; }
+        try {
+            var raw = window.localStorage.getItem(state.storageKey);
+            if (raw) {
+                JSON.parse(raw).forEach(function (key) { state.done[key] = true; });
+            }
+        } catch (error) {
+            // Prywatne okno lub zablokowane dane stron - checklista działa bez zapisu.
+        }
+    }
+
+    function saveDone() {
+        if (!state.storageKey) { return; }
+        try {
+            window.localStorage.setItem(state.storageKey, JSON.stringify(Object.keys(state.done)));
+        } catch (error) {
+            // Brak zapisu nie może przerwać pracy z listą.
+        }
     }
 
     /* ---------------------------------------------------------- wyszukiwanie */
@@ -229,11 +272,17 @@
             .then(function (data) {
                 state.addresses = data.addresses;
                 state.streets = data.streets;
+                // Checklista jest zapamiętywana osobno dla każdej miejscowości.
+                state.storageKey = 'granice:done:' + place.osm_type + place.osm_id;
+                loadDone();
+                el('address-filter').value = '';
                 renderStats(data.stats);
-                renderStreets(data.streets, '');
-                drawAddressMarkers(data.addresses);
+                renderStreets('');
                 setupExports(place);
                 el('addresses-panel').classList.remove('hidden');
+                // Znaczniki powstają po odmalowaniu listy - przy dziesiątkach tysięcy
+                // punktów lista jest widoczna od razu, zamiast czekać na mapę.
+                setTimeout(function () { drawAddressMarkers(data.addresses); }, 0);
                 status(data.stats.total ? null : 'Brak punktów adresowych w OSM dla tego obszaru.', !data.stats.total);
             })
             .catch(function (error) { status(error.message, true); })
@@ -246,10 +295,12 @@
             { v: formatNumber(stats.total), l: 'adresów' },
             { v: formatNumber(stats.streets), l: 'ulic' },
             { v: formatNumber(stats.without_street), l: 'bez nazwy ulicy' },
-            { v: postcodes.length ? postcodes.slice(0, 2).join(', ') + (postcodes.length > 2 ? '…' : '') : '—', l: 'kody pocztowe' }
+            // Sam wykaz kodów potrafi być długi - w kafelku liczba, pełna lista w podpowiedzi.
+            { v: postcodes.length ? formatNumber(postcodes.length) : '—', l: 'kodów pocztowych', t: postcodes.join(', ') }
         ];
         el('stats').innerHTML = cards.map(function (card) {
-            return '<div class="stat"><div class="v">' + escapeHtml(card.v) + '</div><div class="l">' + card.l + '</div></div>';
+            return '<div class="stat"' + (card.t ? ' title="' + escapeHtml(card.t) + '"' : '') + '>' +
+                '<div class="v">' + escapeHtml(card.v) + '</div><div class="l">' + card.l + '</div></div>';
         }).join('');
 
         if (stats.truncated) {
@@ -257,59 +308,239 @@
         }
     }
 
-    function renderStreets(streets, filter) {
-        var needle = (filter || '').trim().toLowerCase();
-        var container = el('street-list');
-        container.innerHTML = '';
+    /* ----------------------------------------------- lista ulic i checklista */
 
-        streets.forEach(function (street) {
+    function computeVisible(filter) {
+        var needle = (filter || '').trim().toLowerCase();
+        var hideDone = el('hide-done').checked;
+        var visible = [];
+
+        state.streets.forEach(function (street) {
+            var key = streetKey(street.street);
+            if (hideDone && state.done[key]) { return; }
+
             var numbers = street.numbers;
             if (needle) {
-                var streetMatches = street.street.toLowerCase().indexOf(needle) !== -1;
-                if (!streetMatches) {
-                    numbers = numbers.filter(function (a) {
-                        return a.housenumber.toLowerCase().indexOf(needle) !== -1;
+                var nameMatches = street.street.toLowerCase().indexOf(needle) !== -1;
+                if (!nameMatches) {
+                    numbers = numbers.filter(function (address) {
+                        return address.housenumber.toLowerCase().indexOf(needle) !== -1;
                     });
                     if (!numbers.length) { return; }
                 }
             }
 
-            var details = document.createElement('details');
-            details.className = 'street';
-            if (needle) { details.open = true; }
-
-            var summary = document.createElement('summary');
-            summary.innerHTML = '<span>' + escapeHtml(street.street) + '</span>' +
-                '<span class="count">' + formatNumber(numbers.length) +
-                (street.postcodes.length ? ' · ' + escapeHtml(street.postcodes.join(', ')) : '') + '</span>';
-            details.appendChild(summary);
-
-            var box = document.createElement('div');
-            box.className = 'numbers';
-            // Numery renderujemy dopiero przy rozwinięciu - lista miasta bywa ogromna.
-            var filled = false;
-            var fill = function () {
-                if (filled) { return; }
-                filled = true;
-                box.innerHTML = numbers.map(function (address) {
-                    var geo = address.lat !== null && address.lon !== null;
-                    return '<span class="num' + (geo ? '' : ' no-geo') + '"' +
-                        (geo ? ' data-lat="' + address.lat + '" data-lon="' + address.lon + '"' : '') +
-                        ' data-osm="' + escapeHtml(address.osm_type + '/' + address.osm_id) + '">' +
-                        escapeHtml(address.housenumber) + '</span>';
-                }).join('');
-            };
-            details.addEventListener('toggle', function () { if (details.open) { fill(); } });
-            if (needle) { fill(); }
-
-            details.appendChild(box);
-            container.appendChild(details);
+            visible.push({ street: street, key: key, numbers: numbers });
         });
 
-        if (!container.children.length) {
+        return visible;
+    }
+
+    function renderStreets(filter) {
+        var container = el('street-list');
+        container.innerHTML = '';
+        state.visible = computeVisible(filter);
+        state.renderedCount = 0;
+
+        if (state.observer) {
+            state.observer.disconnect();
+            state.observer = null;
+        }
+
+        if (!state.visible.length) {
             container.innerHTML = '<p class="muted small">Brak adresów pasujących do filtra.</p>';
+            updateProgress();
+            return;
+        }
+
+        // Przy wąskim wyniku wyszukiwania od razu pokazujemy numery;
+        // przy szerokim zostawiamy ulice zwinięte, żeby lista była czytelna.
+        var autoOpen = !!(filter || '').trim() && state.visible.length <= 20;
+        renderChunk(autoOpen);
+        updateProgress();
+    }
+
+    function renderChunk(autoOpen) {
+        var container = el('street-list');
+        var sentinel = container.querySelector('.load-more');
+        if (sentinel) { sentinel.remove(); }
+
+        var end = Math.min(state.renderedCount + CHUNK_STREETS, state.visible.length);
+        var fragment = document.createDocumentFragment();
+
+        for (var i = state.renderedCount; i < end; i++) {
+            fragment.appendChild(buildStreet(state.visible[i], autoOpen));
+        }
+        container.appendChild(fragment);
+        state.renderedCount = end;
+
+        if (state.renderedCount < state.visible.length) {
+            var remaining = state.visible.length - state.renderedCount;
+            var more = document.createElement('button');
+            more.type = 'button';
+            more.className = 'load-more';
+            more.textContent = 'Pokaż kolejne ulice (pozostało ' + formatNumber(remaining) + ')';
+            more.addEventListener('click', function () { renderChunk(autoOpen); });
+            container.appendChild(more);
+
+            // Doładowanie przy przewijaniu - przycisk zostaje dla obsługi bez IntersectionObserver.
+            if ('IntersectionObserver' in window) {
+                if (state.observer) { state.observer.disconnect(); }
+                state.observer = new IntersectionObserver(function (entries) {
+                    if (entries[0].isIntersecting) {
+                        state.observer.disconnect();
+                        renderChunk(autoOpen);
+                    }
+                }, { root: document.querySelector('.sidebar'), rootMargin: '300px' });
+                state.observer.observe(more);
+            }
         }
     }
+
+    function buildStreet(entry, autoOpen) {
+        var details = document.createElement('details');
+        details.className = 'street' + (state.done[entry.key] ? ' done' : '');
+        details.dataset.key = entry.key;
+        details.open = !!autoOpen;
+
+        var summary = document.createElement('summary');
+        summary.innerHTML =
+            '<span class="street-name">' + escapeHtml(entry.street.street) + '</span>' +
+            '<span class="count">' + formatNumber(entry.numbers.length) +
+            (entry.street.postcodes.length ? ' · ' + escapeHtml(entry.street.postcodes.join(', ')) : '') +
+            '</span>';
+
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'done-btn';
+        button.textContent = state.done[entry.key] ? 'Cofnij' : 'Zrobione';
+        button.title = 'Oznacz ulicę jako obsłużoną';
+        button.addEventListener('click', function (event) {
+            // Bez tego kliknięcie w przycisk rozwinęłoby też sekcję ulicy.
+            event.preventDefault();
+            event.stopPropagation();
+            toggleDone(entry.key);
+        });
+        summary.appendChild(button);
+        details.appendChild(summary);
+
+        var box = document.createElement('div');
+        box.className = 'numbers';
+        var filled = false;
+        var fill = function () {
+            if (filled) { return; }
+            filled = true;
+            box.appendChild(buildNumbers(entry.numbers));
+        };
+        details.addEventListener('toggle', function () { if (details.open) { fill(); } });
+        if (details.open) { fill(); }
+
+        details.appendChild(box);
+        return details;
+    }
+
+    function buildNumbers(numbers) {
+        var fragment = document.createDocumentFragment();
+        var grid = document.createElement('div');
+        grid.className = 'numbers-grid';
+
+        var shown = Math.min(numbers.length, CHUNK_NUMBERS);
+        grid.innerHTML = numbers.slice(0, shown).map(numberChip).join('');
+        fragment.appendChild(grid);
+
+        if (numbers.length > shown) {
+            var more = document.createElement('button');
+            more.type = 'button';
+            more.className = 'load-more small';
+            more.textContent = 'Pokaż wszystkie numery (' + formatNumber(numbers.length) + ')';
+            more.addEventListener('click', function () {
+                grid.innerHTML = numbers.map(numberChip).join('');
+                more.remove();
+            });
+            fragment.appendChild(more);
+        }
+
+        return fragment;
+    }
+
+    function numberChip(address) {
+        var geo = address.lat !== null && address.lon !== null;
+        return '<span class="num' + (geo ? '' : ' no-geo') + '"' +
+            (geo ? ' data-lat="' + address.lat + '" data-lon="' + address.lon + '"' : '') +
+            ' title="' + escapeHtml((address.street || address.city || '') + ' ' + address.housenumber) + '">' +
+            escapeHtml(address.housenumber) + '</span>';
+    }
+
+    function toggleDone(key) {
+        if (state.done[key]) {
+            delete state.done[key];
+        } else {
+            state.done[key] = true;
+        }
+        saveDone();
+
+        var element = el('street-list').querySelector('[data-key="' + cssEscape(key) + '"]');
+        if (element) {
+            var isDone = !!state.done[key];
+            element.classList.toggle('done', isDone);
+            var button = element.querySelector('.done-btn');
+            if (button) { button.textContent = isDone ? 'Cofnij' : 'Zrobione'; }
+            if (isDone && el('hide-done').checked) {
+                element.remove();
+            }
+        }
+
+        updateMarkers(key);
+        updateProgress();
+    }
+
+    function cssEscape(value) {
+        if (window.CSS && typeof window.CSS.escape === 'function') {
+            return window.CSS.escape(value);
+        }
+        return String(value).replace(/["\\]/g, '\\$&');
+    }
+
+    function updateMarkers(key) {
+        var markers = state.markersByStreet[key];
+        if (!markers) { return; }
+        var isDone = !!state.done[key];
+        markers.forEach(function (marker) {
+            marker.setStyle(isDone
+                ? { color: '#94a3b8', fillColor: '#cbd5e1', fillOpacity: 0.45 }
+                : { color: '#b91c1c', fillColor: '#ef4444', fillOpacity: 0.85 });
+        });
+    }
+
+    function updateProgress() {
+        var box = el('progress');
+        if (!state.streets.length) {
+            box.classList.add('hidden');
+            return;
+        }
+
+        var doneStreets = 0;
+        var doneAddresses = 0;
+        var totalAddresses = 0;
+
+        state.streets.forEach(function (street) {
+            totalAddresses += street.count;
+            if (state.done[streetKey(street.street)]) {
+                doneStreets++;
+                doneAddresses += street.count;
+            }
+        });
+
+        var percent = state.streets.length ? Math.round((doneStreets / state.streets.length) * 100) : 0;
+        el('progress-fill').style.width = percent + '%';
+        el('progress-label').textContent =
+            'Zrobione: ' + formatNumber(doneStreets) + ' z ' + formatNumber(state.streets.length) + ' ulic' +
+            (doneAddresses ? ' (' + formatNumber(doneAddresses) + ' z ' + formatNumber(totalAddresses) + ' adresów)' : '');
+        el('reset-done').classList.toggle('hidden', doneStreets === 0);
+        box.classList.remove('hidden');
+    }
+
+    /* ------------------------------------------------------------- zdarzenia */
 
     el('street-list').addEventListener('click', function (event) {
         var target = event.target.closest('.num');
@@ -317,14 +548,25 @@
         var lat = parseFloat(target.dataset.lat);
         var lon = parseFloat(target.dataset.lon);
         map.setView([lat, lon], Math.max(map.getZoom(), 18));
-        L.popup().setLatLng([lat, lon]).setContent('<strong>' + escapeHtml(target.textContent) + '</strong>').openOn(map);
+        L.popup().setLatLng([lat, lon]).setContent('<strong>' + escapeHtml(target.title) + '</strong>').openOn(map);
     });
 
     var filterTimer = null;
     el('address-filter').addEventListener('input', function (event) {
         var value = event.target.value;
         clearTimeout(filterTimer);
-        filterTimer = setTimeout(function () { renderStreets(state.streets, value); }, 180);
+        filterTimer = setTimeout(function () { renderStreets(value); }, 180);
+    });
+
+    el('hide-done').addEventListener('change', function () {
+        renderStreets(el('address-filter').value);
+    });
+
+    el('reset-done').addEventListener('click', function () {
+        state.done = {};
+        saveDone();
+        Object.keys(state.markersByStreet).forEach(updateMarkers);
+        renderStreets(el('address-filter').value);
     });
 
     el('show-markers').addEventListener('change', function (event) {
@@ -337,37 +579,65 @@
             map.removeLayer(state.addressLayer);
             state.addressLayer = null;
         }
+        if (state.observer) {
+            state.observer.disconnect();
+            state.observer = null;
+        }
         state.addresses = [];
         state.streets = [];
+        state.visible = [];
+        state.markersByStreet = {};
         el('street-list').innerHTML = '';
+        el('progress').classList.add('hidden');
     }
 
     function drawAddressMarkers(addresses) {
         if (state.addressLayer) { map.removeLayer(state.addressLayer); }
 
         var markers = [];
+        state.markersByStreet = {};
+
         addresses.forEach(function (address) {
             if (address.lat === null || address.lon === null) { return; }
+            var key = streetKey(address.street || NO_STREET);
+            var isDone = !!state.done[key];
+
             var marker = L.circleMarker([address.lat, address.lon], {
                 renderer: canvasRenderer,
                 radius: 4,
-                color: '#b91c1c',
                 weight: 1,
-                fillColor: '#ef4444',
-                fillOpacity: 0.85
+                color: isDone ? '#94a3b8' : '#b91c1c',
+                fillColor: isDone ? '#cbd5e1' : '#ef4444',
+                fillOpacity: isDone ? 0.45 : 0.85,
+                address: address
             });
-            marker.bindPopup(
-                '<strong>' + escapeHtml((address.street || address.city || '') + ' ' + address.housenumber) + '</strong><br>' +
-                (address.postcode ? escapeHtml(address.postcode) + ' ' : '') + escapeHtml(address.city) +
-                (address.building ? '<br><span class="muted">budynek: ' + escapeHtml(address.building) + '</span>' : '') +
-                '<br><a href="https://www.openstreetmap.org/' + escapeHtml(address.osm_type) + '/' + address.osm_id +
-                '" target="_blank" rel="noreferrer">obiekt OSM</a>'
-            );
+
+            if (!state.markersByStreet[key]) { state.markersByStreet[key] = []; }
+            state.markersByStreet[key].push(marker);
             markers.push(marker);
         });
 
-        state.addressLayer = L.layerGroup(markers);
+        // FeatureGroup przekazuje zdarzenia dzieci w górę, więc wystarczy jeden uchwyt
+        // zamiast dymka doczepianego do każdego z kilkudziesięciu tysięcy punktów.
+        state.addressLayer = L.featureGroup(markers);
+        state.addressLayer.on('click', function (event) {
+            var address = event.layer.options.address;
+            if (!address) { return; }
+            L.popup()
+                .setLatLng(event.latlng)
+                .setContent(addressPopup(address))
+                .openOn(map);
+        });
+
         if (el('show-markers').checked) { state.addressLayer.addTo(map); }
+    }
+
+    function addressPopup(address) {
+        return '<strong>' + escapeHtml((address.street || address.city || '') + ' ' + address.housenumber) + '</strong><br>' +
+            (address.postcode ? escapeHtml(address.postcode) + ' ' : '') + escapeHtml(address.city) +
+            (address.building ? '<br><span class="muted">budynek: ' + escapeHtml(address.building) + '</span>' : '') +
+            '<br><a href="https://www.openstreetmap.org/' + escapeHtml(address.osm_type) + '/' + address.osm_id +
+            '" target="_blank" rel="noreferrer">obiekt OSM</a>';
     }
 
     function setupExports(place) {

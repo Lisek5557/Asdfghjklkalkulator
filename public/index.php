@@ -60,9 +60,21 @@ $contactOk = Config::contactConfigured();
         <section id="addresses-panel" class="panel hidden">
             <h2>Adresy</h2>
             <div id="stats" class="stats"></div>
+
+            <div id="progress" class="progress hidden">
+                <div class="progress-head">
+                    <span id="progress-label">Zrobione: 0 z 0 ulic</span>
+                    <button type="button" id="reset-done" class="link-button">Wyczyść</button>
+                </div>
+                <div class="progress-track"><div id="progress-fill" class="progress-fill"></div></div>
+            </div>
+
             <div class="toolbar">
                 <input type="search" id="address-filter" placeholder="Filtruj ulicę lub numer…">
+            </div>
+            <div class="toolbar options">
                 <label class="checkbox"><input type="checkbox" id="show-markers" checked> Punkty na mapie</label>
+                <label class="checkbox"><input type="checkbox" id="hide-done"> Ukryj zrobione</label>
             </div>
             <div class="exports">
                 <a id="export-csv" class="chip" href="#">CSV</a>
