@@ -7,5 +7,5 @@ cache/*
 .vscode/
 config/local.php
 granice-ftp.zip
-node_modules/
+node_modules
 lista-adresow.png
