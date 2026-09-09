@@ -11,43 +11,51 @@ declare(strict_types=1);
  */
 function kalk_deployment_files(string $root): array
 {
-    // Katalogi niepotrzebne na serwerze produkcyjnym.
-    $excludedDirs = ['.git', '.github', 'tests', 'deploy', 'node_modules', '.idea', '.vscode'];
+    // Lista dozwolonych, a nie wykluczonych: na serwer trafia dokładnie to, co jest
+    // potrzebne do działania aplikacji. Dzięki temu przypadkowe pliki w katalogu
+    // projektu (paczki, zrzuty ekranu, notatki) nigdy nie wyjadą na hosting.
+    $allowedTop = ['public', 'src', 'config', 'bin', '.htaccess', 'index.php', 'README.md'];
     // Konfiguracja serwera nigdy nie jest nadpisywana z zewnątrz.
-    $excludedFiles = ['config/local.php', '.gitignore'];
-    $excludedExtensions = ['log'];
+    $excludedFiles = ['config/local.php'];
 
     $root = rtrim(str_replace('\\', '/', $root), '/');
     if (!is_dir($root)) {
         throw new RuntimeException("Katalog projektu nie istnieje: {$root}");
     }
 
-    $iterator = new RecursiveIteratorIterator(
-        new RecursiveCallbackFilterIterator(
-            new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS),
-            static function (SplFileInfo $item) use ($root, $excludedDirs): bool {
-                $relative = str_replace('\\', '/', substr($item->getPathname(), strlen($root) + 1));
-                if (in_array(explode('/', $relative)[0], $excludedDirs, true)) {
-                    return false;
-                }
-                // Z katalogu cache bierzemy tylko .htaccess - reszta to dane tymczasowe.
-                return !str_starts_with($relative, 'cache/') || $relative === 'cache/.htaccess';
-            }
-        ),
-        RecursiveIteratorIterator::LEAVES_ONLY
-    );
-
     $files = [];
-    foreach ($iterator as $item) {
-        /** @var SplFileInfo $item */
-        $relative = str_replace('\\', '/', substr($item->getPathname(), strlen($root) + 1));
-        if (in_array($relative, $excludedFiles, true)) {
-            continue;
+
+    $collect = static function (string $relativeDir) use ($root, &$collect, &$files, $excludedFiles): void {
+        $absolute = $root . '/' . $relativeDir;
+        foreach (scandir($absolute) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $relative = ($relativeDir === '' ? '' : $relativeDir . '/') . $entry;
+            $path = $root . '/' . $relative;
+            if (is_link($path)) {
+                continue;
+            }
+            if (is_dir($path)) {
+                $collect($relative);
+            } elseif (is_file($path) && !in_array($relative, $excludedFiles, true)) {
+                $files[] = $relative;
+            }
         }
-        if (in_array(strtolower($item->getExtension()), $excludedExtensions, true)) {
-            continue;
+    };
+
+    foreach ($allowedTop as $entry) {
+        $path = $root . '/' . $entry;
+        if (is_dir($path)) {
+            $collect($entry);
+        } elseif (is_file($path)) {
+            $files[] = $entry;
         }
-        $files[] = $relative;
+    }
+
+    // Katalog cache musi istnieć na serwerze, ale bez danych tymczasowych.
+    if (is_file($root . '/cache/.htaccess')) {
+        $files[] = 'cache/.htaccess';
     }
 
     sort($files);
