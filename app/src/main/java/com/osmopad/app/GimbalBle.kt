@@ -309,14 +309,39 @@ class GimbalBle(context: Context, private val listener: Listener) {
     /** Ruch z zadaną prędkością (dziesiąte °/s). Zastępuje poprzednią niewysłaną komendę ruchu. */
     fun sendSpeed(yaw: Int, pitch: Int) = ble.post {
         if (!isReady) return@post
-        pendingMotion = Duml.speedRotate(yaw, pitch, 0, time = 10, seq = nextSeq())
+        pendingMotion = if (swapPitchRoll) {
+            Duml.speedRotate(yaw, pitch = 0, roll = pitch, time = 10, seq = nextSeq())
+        } else {
+            Duml.speedRotate(yaw, pitch, 0, time = 10, seq = nextSeq())
+        }
+        pump()
+    }
+
+    /**
+     * Zamienia miejscami pola pochylenia i przechyłu w komendzie. Niektóre
+     * modele (np. podejrzewany Osmo Mobile SE) mogą mieć inną kolejność osi.
+     */
+    @Volatile var swapPitchRoll = false
+
+    /** Test diagnostyczny: prędkość tylko w jednym polu komendy (0, 1 lub 2). */
+    fun sendSlotTest(slot: Int, value: Int) = ble.post {
+        if (!isReady) return@post
+        pendingMotion = when (slot) {
+            0 -> Duml.speedRotate(yaw = value, pitch = 0, roll = 0, seq = nextSeq())
+            1 -> Duml.speedRotate(yaw = 0, pitch = 0, roll = value, seq = nextSeq())
+            else -> Duml.speedRotate(yaw = 0, pitch = value, roll = 0, seq = nextSeq())
+        }
         pump()
     }
 
     /** Ruch w trybie PWM (emulacja fizycznego joysticka). */
     fun sendPwm(yawAxis: Float, pitchAxis: Float) = ble.post {
         if (!isReady) return@post
-        pendingMotion = Duml.pwm(Duml.axisToPwm(yawAxis), Duml.axisToPwm(pitchAxis), seq = nextSeq())
+        pendingMotion = if (swapPitchRoll) {
+            Duml.pwm(Duml.axisToPwm(yawAxis), Duml.PWM_CENTER, roll = Duml.axisToPwm(pitchAxis), seq = nextSeq())
+        } else {
+            Duml.pwm(Duml.axisToPwm(yawAxis), Duml.axisToPwm(pitchAxis), seq = nextSeq())
+        }
         pump()
     }
 

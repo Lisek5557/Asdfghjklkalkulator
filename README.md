@@ -46,12 +46,15 @@ Na Androidzie 11 i starszym do skanowania BLE musi być włączona lokalizacja.
 | Widok (⧉) | odwróć pion |
 | Menu (≡) | połącz z ostatnim gimbalem |
 
-## Gdy gimbal nie reaguje
+## Gdy gimbal nie reaguje albo rusza złą osią
 
-1. Naciśnij **Test →**: gimbal powinien obrócić się w prawo przez sekundę.
-2. Jeśli nic się nie dzieje, zaznacz **Tryb PWM** i spróbuj ponownie.
-3. Wyłącz i włącz gimbal, upewnij się, że Mimo nie jest połączone.
-4. Zrób zrzut ekranu z logiem na dole aplikacji i wklej go w issue lub w rozmowie.
+1. Użyj przycisków **Test oś 1 / 2 / 3**. Każdy z nich rusza jedną osią przez sekundę.
+   Zapisz, która oś obraca w lewo/prawo, która pochyla w górę/dół, a która przechyla telefon na bok.
+2. Jeśli gałka w górę/dół **przechyla telefon na bok** zamiast go pochylać, zaznacz
+   **Zamień pochylenie z przechyłem**.
+3. Jeśli gimbal w ogóle nie reaguje, zaznacz **Tryb PWM** i spróbuj ponownie.
+4. Wyłącz i włącz gimbal, upewnij się, że Mimo nie jest połączone.
+5. Zrób zrzut ekranu z logiem na dole aplikacji i wklej go w issue lub w rozmowie.
 
 ## Budowanie lokalnie
 

@@ -146,14 +146,51 @@
                 android:focusable="false"
                 android:text="@string/stop" />
 
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/axis_help"
+            android:textSize="13sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
             <Button
-                android:id="@+id/test"
+                android:id="@+id/test1"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:focusable="false"
-                android:text="@string/test" />
+                android:text="@string/test1" />
+
+            <Button
+                android:id="@+id/test2"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:focusable="false"
+                android:text="@string/test2" />
+
+            <Button
+                android:id="@+id/test3"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:focusable="false"
+                android:text="@string/test3" />
         </LinearLayout>
+
+        <CheckBox
+            android:id="@+id/swapAxes"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:focusable="false"
+            android:text="@string/swap_axes" />
 
         <LinearLayout
             android:layout_width="match_parent"

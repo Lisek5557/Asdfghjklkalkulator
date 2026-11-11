@@ -39,6 +39,7 @@ class MainActivity : Activity(), GimbalBle.Listener, InputManager.InputDeviceLis
     private lateinit var invertPan: CheckBox
     private lateinit var invertTilt: CheckBox
     private lateinit var pwmMode: CheckBox
+    private lateinit var swapAxes: CheckBox
     private lateinit var logMotion: CheckBox
     private lateinit var logView: TextView
 
@@ -83,6 +84,7 @@ class MainActivity : Activity(), GimbalBle.Listener, InputManager.InputDeviceLis
         invertPan = findViewById(R.id.invertPan)
         invertTilt = findViewById(R.id.invertTilt)
         pwmMode = findViewById(R.id.pwmMode)
+        swapAxes = findViewById(R.id.swapAxes)
         logMotion = findViewById(R.id.logMotion)
         logView = findViewById(R.id.log)
 
@@ -93,6 +95,8 @@ class MainActivity : Activity(), GimbalBle.Listener, InputManager.InputDeviceLis
         invertPan.isChecked = prefs.getBoolean("invertPan", false)
         invertTilt.isChecked = prefs.getBoolean("invertTilt", false)
         pwmMode.isChecked = prefs.getBoolean("pwm", false)
+        swapAxes.isChecked = prefs.getBoolean("swapAxes", false)
+        gimbal.swapPitchRoll = swapAxes.isChecked
         updateSpeedLabel()
 
         speedBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -113,7 +117,13 @@ class MainActivity : Activity(), GimbalBle.Listener, InputManager.InputDeviceLis
         findViewById<Button>(R.id.disconnect).setOnClickListener { gimbal.disconnect() }
         findViewById<Button>(R.id.recenter).setOnClickListener { gimbal.recenter() }
         findViewById<Button>(R.id.stop).setOnClickListener { gimbal.stop() }
-        findViewById<Button>(R.id.test).setOnClickListener { testPulse() }
+        findViewById<Button>(R.id.test1).setOnClickListener { slotTest(0) }
+        findViewById<Button>(R.id.test2).setOnClickListener { slotTest(1) }
+        findViewById<Button>(R.id.test3).setOnClickListener { slotTest(2) }
+        swapAxes.setOnCheckedChangeListener { _, checked ->
+            gimbal.swapPitchRoll = checked
+            savePrefs()
+        }
         findViewById<Button>(R.id.modeLock).setOnClickListener { gimbal.setMode(0) }
         findViewById<Button>(R.id.modeFollow).setOnClickListener { gimbal.setMode(1) }
         findViewById<Button>(R.id.modeFpv).setOnClickListener { gimbal.setMode(2) }
@@ -148,6 +158,7 @@ class MainActivity : Activity(), GimbalBle.Listener, InputManager.InputDeviceLis
             .putBoolean("invertPan", invertPan.isChecked)
             .putBoolean("invertTilt", invertTilt.isChecked)
             .putBoolean("pwm", pwmMode.isChecked)
+            .putBoolean("swapAxes", swapAxes.isChecked)
             .apply()
     }
 
@@ -326,6 +337,7 @@ class MainActivity : Activity(), GimbalBle.Listener, InputManager.InputDeviceLis
         if (!isFromPad(event)) return super.dispatchKeyEvent(event)
         val down = event.action == KeyEvent.ACTION_DOWN
         val first = down && event.repeatCount == 0
+        if (first) onLog("pad: ${KeyEvent.keyCodeToString(event.keyCode).removePrefix("KEYCODE_")}")
         when (event.keyCode) {
             KeyEvent.KEYCODE_DPAD_LEFT -> dpadX = if (down) -1f else 0f
             KeyEvent.KEYCODE_DPAD_RIGHT -> dpadX = if (down) 1f else 0f
@@ -346,7 +358,8 @@ class MainActivity : Activity(), GimbalBle.Listener, InputManager.InputDeviceLis
             }
             KeyEvent.KEYCODE_BUTTON_SELECT -> if (first) invertTilt.isChecked = !invertTilt.isChecked
             KeyEvent.KEYCODE_BUTTON_START -> if (first && !connected) connectLast()
-            KeyEvent.KEYCODE_BUTTON_THUMBL, KeyEvent.KEYCODE_BUTTON_THUMBR -> if (first) gimbal.recenter()
+            // Wciśnięcie gałek celowo nic nie robi – łatwo je kliknąć przypadkiem.
+            KeyEvent.KEYCODE_BUTTON_THUMBL, KeyEvent.KEYCODE_BUTTON_THUMBR -> {}
             else -> return super.dispatchKeyEvent(event)
         }
         return true
@@ -394,17 +407,17 @@ class MainActivity : Activity(), GimbalBle.Listener, InputManager.InputDeviceLis
         wasMoving = moving
     }
 
-    private fun testPulse() {
+    private fun slotTest(slot: Int) {
         if (!connected) {
             Toast.makeText(this, "Najpierw połącz gimbal.", Toast.LENGTH_SHORT).show()
             return
         }
-        onLog("→ test: obrót w prawo przez 1 s")
+        onLog("→ test osi ${slot + 1}: ruch przez 1 s")
         val end = System.currentTimeMillis() + 1000
         val r = object : Runnable {
             override fun run() {
                 if (System.currentTimeMillis() < end) {
-                    if (pwmMode.isChecked) gimbal.sendPwm(0.5f, 0f) else gimbal.sendSpeed(300, 0)
+                    gimbal.sendSlotTest(slot, 300)
                     main.postDelayed(this, TICK_MS)
                 } else {
                     gimbal.stop()

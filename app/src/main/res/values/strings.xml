@@ -11,7 +11,11 @@
     <string name="pwm_mode">Tryb PWM (spróbuj, jeśli gimbal nie reaguje)</string>
     <string name="recenter">Wyśrodkuj</string>
     <string name="stop">Stop</string>
-    <string name="test">Test →</string>
+    <string name="test1">Test oś 1</string>
+    <string name="test2">Test oś 2</string>
+    <string name="test3">Test oś 3</string>
+    <string name="axis_help">Diagnostyka osi: każdy przycisk rusza jedną osią przez 1 s. Zapisz, który powoduje obrót lewo/prawo, który pochylenie góra/dół, a który przechył telefonu na bok.</string>
+    <string name="swap_axes">Zamień pochylenie z przechyłem (jeśli gałka góra/dół przechyla telefon na bok)</string>
     <string name="mode_lock">Lock</string>
     <string name="mode_follow">Follow</string>
     <string name="mode_fpv">FPV</string>
