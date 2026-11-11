@@ -1,0 +1,45 @@
+name: Build APK
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Testy i budowanie APK
+        run: ./gradlew --no-daemon testDebugUnitTest assembleDebug
+
+      - name: Zmień nazwę APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk OsmoPad-${{ github.run_number }}.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OsmoPad-apk
+          path: OsmoPad-*.apk
+
+      # Na gałęzi main: publikuje APK jako Release (łatwe pobranie na telefonie).
+      - name: Release
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Osmo Pad ${{ github.run_number }}
+          files: OsmoPad-*.apk
+          body: |
+            Pobierz plik `OsmoPad-${{ github.run_number }}.apk` na telefon sterujący i zainstaluj
+            (zezwól na instalację z nieznanych źródeł).

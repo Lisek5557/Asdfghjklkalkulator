@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- prosty pad -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M34,42h40c8,0 14,6 15,14l2,12c1,6 -6,10 -11,6l-8,-7h-36l-8,7c-5,4 -12,0 -11,-6l2,-12c1,-8 7,-14 15,-14z" />
+    <path
+        android:fillColor="#1E88E5"
+        android:pathData="M38,50h4v4h4v4h-4v4h-4v-4h-4v-4h4z" />
+    <path
+        android:fillColor="#1E88E5"
+        android:pathData="M70,52m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0M64,58m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0" />
+</vector>

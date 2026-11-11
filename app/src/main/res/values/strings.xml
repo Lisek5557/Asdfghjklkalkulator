@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Osmo Pad</string>
+    <string name="status_idle">Nie połączono. Naciśnij „Szukaj”.</string>
+    <string name="scan">Szukaj</string>
+    <string name="reconnect">Ostatni</string>
+    <string name="disconnect">Rozłącz</string>
+    <string name="show_all">Pokaż wszystkie urządzenia BLE</string>
+    <string name="invert_pan">Odwróć poziom (lewo/prawo)</string>
+    <string name="invert_tilt">Odwróć pion (góra/dół)</string>
+    <string name="pwm_mode">Tryb PWM (spróbuj, jeśli gimbal nie reaguje)</string>
+    <string name="recenter">Wyśrodkuj</string>
+    <string name="stop">Stop</string>
+    <string name="test">Test →</string>
+    <string name="mode_lock">Lock</string>
+    <string name="mode_follow">Follow</string>
+    <string name="mode_fpv">FPV</string>
+    <string name="log_motion">Pokazuj komendy ruchu w logu</string>
+    <string name="help">Pad Xbox:\n
+• Lewa gałka – obrót (pełna prędkość)\n
+• Prawa gałka – obrót precyzyjny (wolniej)\n
+• Krzyżak – powolne przesuwanie\n
+• RT – przyspieszenie (do 2×), LT – zwolnienie\n
+• LB / RB – zmniejsz / zwiększ prędkość maksymalną\n
+• A – wyśrodkuj, B – stop\n
+• X – tryb Lock, Y – tryb Follow\n
+• Widok (⧉) – odwróć pion\n
+• Menu (≡) – połącz z ostatnim gimbalem\n\n
+Gimbal nie może być w tym czasie połączony z DJI Mimo. Telefon na gimbalu nagrywa zwykłą aplikacją aparatu.</string>
+</resources>
