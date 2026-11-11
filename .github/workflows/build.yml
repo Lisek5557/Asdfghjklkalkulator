@@ -32,13 +32,14 @@ jobs:
           name: OsmoPad-apk
           path: OsmoPad-*.apk
 
-      # Na gałęzi main: publikuje APK jako Release (łatwe pobranie na telefonie).
+      # Publikuje APK jako Release (łatwe pobranie na telefonie).
       - name: Release
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
           name: Osmo Pad ${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
           files: OsmoPad-*.apk
           body: |
             Pobierz plik `OsmoPad-${{ github.run_number }}.apk` na telefon sterujący i zainstaluj
